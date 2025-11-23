@@ -2,15 +2,15 @@
 import mysql from "mysql2/promise";
 import "dotenv/config";
 
-// En producción (Railway) SIEMPRE usaremos DATABASE_URL
-// que ya contiene host, usuario, contraseña, puerto y base de datos.
-// Ejemplo: mysql://root:pass@host:port/railway
+// Si hay DATABASE_URL, usamos esa (producción en Railway).
+// Si no, usamos los campos separados (para desarrollo local).
+const connectionConfig = process.env.DATABASE_URL || {
+  host: process.env.MYSQLHOST || "localhost",
+  user: process.env.MYSQLUSER || "root",
+  password: process.env.MYSQLPASSWORD || "",
+  database: process.env.MYSQLDATABASE || "",
+  port: Number(process.env.MYSQLPORT) || 3306,
+};
 
-if (!process.env.DATABASE_URL) {
-  console.error("FALTA la variable DATABASE_URL en Railway");
-  process.exit(1);
-}
 
-const pool = mysql.createPool(process.env.DATABASE_URL);
-
-export default pool;
+export const pool = mysql.createPool(connectionConfig);
