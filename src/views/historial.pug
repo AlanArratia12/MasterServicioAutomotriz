@@ -103,14 +103,14 @@ block content
           tbody#historial-lista
             //- Filas generadas por /js/historial.js
 
-      // ====== Barra de paginación (meta + botones) ======
+      // ====== Barra de paginación ======
       .historial-pager
         .historial-pager__meta#historial-meta
         nav.historial-pager__nav#historial-paginacion
 
-  // ================= Template de fila + panel de detalles (IDÉNTICO A RECEPCIÓN) =================
+  // ================= Template de fila + panel de detalles =================
   template#tpl-historial
-    //- === Fila principal ===
+    // Fila principal
     tr
       td.slot-idx 1
       td.slot-cliente Juan Pérez
@@ -122,85 +122,72 @@ block content
       td.slot-ingreso 2025-10-08 09:30
       td.actions-row
         button.btn.secondary.btn-sm.toggle-detalle(data-id="__ID__") Más info
-        //- Se omite el botón Borrar de Recepción aquí
 
-    //- === Panel de detalle (plegado) ===
+    // Panel de detalle
     tr.row-details(hidden)
       td(colspan="7")
         .details(data-id="__ID__" hidden)
+
           // --------- FILA 1: CLIENTE + VEHÍCULO ---------
           .details-grid
-            // ----- TARJETA: CLIENTE -----
             .details-card.details-card--cliente
               h5
                 i.bi.bi-person-fill.me-1
                 | Datos del cliente
               p
                 strong Nombre:
-                |  
                 span.slot-det-cliente __CLIENTE__
               p
                 strong Teléfono 1:
-                |  
                 span.slot-det-tel1 __TEL1__
               p
                 strong Teléfono 2:
-                |  
                 span.slot-det-tel2 __TEL2__
 
-            // ----- TARJETA: VEHÍCULO + VIN -----
             .details-card.details-card--vehiculo
               h5
                 i.bi.bi-car-front-fill.me-1
                 | Datos del vehículo
               p
                 strong Marca:
-                |  
                 span.slot-det-marca __MARCA__
               p
                 strong Modelo:
-                |  
                 span.slot-det-modelo __MODELO__
               p
                 strong Año:
-                |  
                 span.slot-det-anio __ANIO__
               p
                 strong Color:
-                |  
                 span.slot-det-color __COLOR__
 
               p.mb-1.mt-2
                 strong VIN actual:
-                |  
                 span.slot-det-vin __VIN__
               label.form-label.mb-1(for="vin-__ID__") Capturar / editar VIN
               input.form-control.form-control-sm.vin-input(
                 id="vin-__ID__"
                 type="text"
-                placeholder="Ej. 1HGCM82633A004352"
                 value="__VIN__"
+                placeholder="Ej. 1HGCM82633A004352"
                 data-id="__ID__"
               )
 
-          // --------- FILA 2: SERVICIO / ESTADO + SEGUIMIENTO ---------
+          // --------- FILA 2: SERVICIO ---------
           .details-grid.mt-2
-            // ----- TARJETA: SERVICIO / ESTADO -----
             .details-card.details-card--servicio
               h5
                 i.bi.bi-wrench-adjustable.me-1
                 | Servicio
               p
                 strong Falla reportada:
-                |  
                 span.slot-det-falla __FALLA__
               p.mt-2
                 strong Estado actual:
-                |  
                 span.badge.ms-2.slot-estado Recibido
 
               .form-group.mt-2
-                label.form-label.mb-1 Cambiar estado
+                label Cambiar estado
                 select.form-select.form-select-sm.estado-select(data-id="__ID__")
                   option Recibido
                   option Diagnóstico
@@ -209,38 +196,35 @@ block content
                   option Listo
                   option Entregado
 
-            // ----- TARJETA: COBRO / MECÁNICO -----
             .details-card.details-card--seguimiento
               h5
                 i.bi.bi-clipboard-check.me-1
                 | Seguimiento
-              label.form-label.mb-1 Presupuesto / Cobro
+              label Presupuesto / Cobro
               textarea.form-control.form-control-sm.cobro-input(
                 rows="3"
                 data-id="__ID__"
-                placeholder="Detalles del costo..."
               )
-              label.form-label.mt-2.mb-1 Mecánico que reparó
+              label.mt-2 Mecánico que reparó
               input.form-control.form-control-sm.mecanico-input(
                 type="text"
                 data-id="__ID__"
-                placeholder="Nombre del técnico"
               )
 
-          // --------- FILA 3: FOTOS (SUBIR/CÁMARA IZQUIERDA, GALERÍA DERECHA) ---------
+          // --------- FILA 3: FOTOS ---------
           h5.mt-3
             i.bi.bi-camera-fill.me-1
             | Evidencia fotográfica
           .details-grid
-            // Columna IZQUIERDA: Subir / tomar fotos (como en Recepción)
+
+            // --- IZQUIERDA: subir fotos / cámara ---
             .details-card.details-card--fotos
               .form-group.mb-2
-                label.form-label.mb-1(for="fotos-__ID__") Seleccionar fotos (galería)
+                label(for="fotos-__ID__") Seleccionar fotos (galería)
                 input.form-control.form-control-sm.fotos-input(
                   id="fotos-__ID__"
                   type="file"
                   accept="image/*"
-                  capture="environment"
                   multiple
                   data-id="__ID__"
                 )
@@ -256,16 +240,15 @@ block content
                 data-id="__ID__"
               )
 
-            // Columna DERECHA: Galería
+            // --- DERECHA: galería ---
             .details-card.details-card--galeria
               .fotos-grid(data-id="__ID__")
-                //- Placeholder para cuando no hay fotos cargadas aún
                 p.text-muted.small(data-placeholder="no-fotos") Sin fotos aún.
 
+          // ---- FOOT ----
           .details-foot.mt-3.text-end
             button.btn.btn-sm.guardar-cambios(data-id="__ID__") Guardar
             span.ms-2.text-success.small.save-ok.d-none(data-id="__ID__") Guardado ✓
             span.ms-2.text-danger.small.save-err.d-none(data-id="__ID__") Error al guardar
 
-  // ===== Script específico =====
   script(src="/js/historial.js?v=14")
