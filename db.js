@@ -1,3 +1,4 @@
+// src/db.js (o donde lo tengas)
 import mysql from "mysql2/promise";
 import "dotenv/config";
 
