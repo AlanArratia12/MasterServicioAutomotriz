@@ -1,0 +1,83 @@
+//- src/views/partials/_navbar.pug
+nav.navbar.navbar-expand-lg.topbar
+  .container
+    a.brand.d-flex.align-items-center.gap-2(href="/")
+      img.brand-logo(src="/images/logo-master.jpg" alt="Master" width="28" height="28")
+      span.brand-title Master Servicio Automotriz
+
+    button.navbar-toggler(
+      type="button"
+      data-bs-toggle="collapse"
+      data-bs-target="#mainNav"
+      aria-controls="mainNav"
+      aria-expanded="false"
+      aria-label="Menú"
+    )
+      span.navbar-toggler-icon
+
+    #mainNav.collapse.navbar-collapse
+      ul.navbar-nav.ms-auto.topnav
+
+        // ================== SI HAY SESIÓN ==================
+        if user
+
+          // --- SOLO ADMIN VE RECEPCIÓN E HISTORIAL ---
+          if user.role === 'admin'
+            li.nav-item
+              a.nav-link.toplink(href="/recepcion") Recepción
+
+            li.nav-item
+              a.nav-link(href="/historial") Historial y búsquedas
+
+          // --- Menú de usuario (admin y empleados) ---
+          li.nav-item.dropdown
+            a.nav-link.dropdown-toggle#userMenu(
+              href="#"
+              role="button"
+              data-bs-toggle="dropdown"
+              aria-expanded="false"
+            )
+              i.bi.bi-person-circle.me-1
+              | #{user.nombre || user.username} · 
+              span.text-muted #{user.role}
+
+            ul.dropdown-menu.dropdown-menu-end(aria-labelledby="userMenu")
+
+              // Opciones solo para admin
+              if user.role === 'admin'
+                li
+                  a.dropdown-item(href="/ajustes")
+                    i.bi.bi-gear.me-1
+                    | Ajustes
+                li
+                  hr.dropdown-divider
+
+              // ===== Botón de tema (para cualquier rol) =====
+              li
+                button#theme-toggle.dropdown-item(type="button")
+                  i.bi.bi-moon-stars-fill.me-1
+                  | Tema oscuro
+
+              li
+                hr.dropdown-divider
+
+              // Perfil (común)
+              li
+                a.dropdown-item(href="#") Perfil
+
+              li
+                hr.dropdown-divider
+
+              // Logout
+              li
+                form(method="post", action="/logout")
+                  button.dropdown-item(type="submit")
+                    i.bi.bi-box-arrow-right.me-1
+                    | Cerrar sesión
+
+        // ================== SI NO HAY SESIÓN ==================
+        if !user
+          li.nav-item
+            a.nav-link(href="/login")
+              i.bi.bi-box-arrow-in-right.me-1
+              | Iniciar sesión

@@ -1,0 +1,127 @@
+//- src/views/ajustes.pug
+extends layout
+
+block content
+  h1 Ajustes
+  p.lead Sección solo para el usuario administrador.
+
+  // ======== TARJETA USUARIOS ========
+  .card.mt-4
+    .card-body
+      h3.h5.mb-3 Usuarios
+      p.text-muted Aquí puedes agregar y administrar usuarios del sistema.
+
+      // ----- Formulario crear usuario -----
+      form#form-user.row.g-3.mb-4
+        .col-md-4
+          label.form-label(for="nombre") Nombre completo
+          input#nombre.form-control(
+            type="text"
+            name="nombre"
+            placeholder="Ej. Juan Pérez"
+            required
+          )
+
+        .col-md-3
+          label.form-label(for="username") Usuario
+          input#username.form-control(
+            type="text"
+            name="username"
+            placeholder="Ej. juan"
+            required
+          )
+
+        .col-md-3
+          label.form-label(for="password") Contraseña
+          input#password.form-control(
+            type="password"
+            name="password"
+            placeholder="Contraseña"
+            required
+          )
+
+        .col-md-2
+          label.form-label(for="rol") Rol
+          select#rol.form-select(name="rol" required)
+            option(value="user" selected) Usuario
+            option(value="admin") Administrador
+
+        .col-12.mt-2
+          button.btn.btn-primary(type="submit")
+            i.bi.bi-person-plus.me-1
+            | Crear usuario
+
+      // ----- Tabla de usuarios -----
+      table.table.align-middle.mb-0
+        thead
+          tr
+            th #
+            th Usuario
+            th Nombre
+            th Rol
+            th Acciones
+        tbody
+          if !usuarios || usuarios.length === 0
+            tr
+              td(colspan="5").text-center.text-muted No hay usuarios registrados.
+          else
+            each u, idx in usuarios
+              tr
+                td #{idx + 1}
+                td #{u.username}
+                td #{u.nombre}
+                td
+                  if u.role === "admin"
+                    span.badge.bg-primary Administrador
+                  else
+                    span.badge.bg-secondary Usuario
+                td
+                  // Botón cambiar contraseña
+                  button.btn.btn-warning.btn-sm.me-2.btn-pass(
+                    type="button",
+                    data-id=u.id,
+                    data-username=u.username
+                  )
+                    i.bi.bi-key.me-1
+                    | Cambiar contraseña
+
+                  // Botón eliminar (no deja eliminarse a sí mismo)
+                  if u.username !== user.username
+                    button.btn.btn-danger.btn-sm.btn-eliminar(
+                      type="button",
+                      data-id=u.id
+                    )
+                      i.bi.bi-trash.me-1
+                      | Eliminar
+                  else
+                    span.text-muted No puedes eliminar tu propio usuario.
+
+  // ======== MODAL CAMBIAR CONTRASEÑA ========
+  #modalPass.modal.fade(tabindex="-1")
+    .modal-dialog
+      .modal-content
+        .modal-header
+          h5.modal-title Cambiar contraseña
+          button.btn-close(type="button" data-bs-dismiss="modal")
+        .modal-body
+          input#pass-user-id(type="hidden")
+          .mb-3
+            label.form-label Nueva contraseña
+            input#pass-new.form-control(
+              type="password"
+              placeholder="Nueva contraseña"
+            )
+          .mb-3
+            label.form-label Confirmar contraseña
+            input#pass-confirm.form-control(
+              type="password"
+              placeholder="Confirmar contraseña"
+            )
+          .alert.alert-danger.d-none#pass-error
+            | Las contraseñas no coinciden.
+        .modal-footer
+          button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Cancelar
+          button.btn.btn-primary#btn-save-pass(type="button") Guardar
+
+  // ===== Script específico de esta vista =====
+  script(src="/js/ajustes.js?v=1" defer)

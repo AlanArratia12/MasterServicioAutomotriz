@@ -1,0 +1,16 @@
+# Dependencias
+node_modules/
+
+# Configuración del editor
+.vscode/
+
+# Archivos de entorno (claves, contraseñas)
+.env
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Carpeta de subidas locales (opcional, porque ahora usas Cloudinary)
+uploads/

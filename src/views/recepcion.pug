@@ -1,0 +1,253 @@
+//- src/views/recepcion.pug
+extends layout
+
+block content
+  h1 Recepción de vehículos
+
+  // ===== FORMULARIO: SOLO ADMIN =====
+  if user && user.role === 'admin'
+    // ===== FORMULARIO: envía a /api/ordenes y llena la tabla de abajo =====
+    form#form-recepcion.card(enctype="multipart/form-data")
+      // ====== Sección: Datos del cliente ======
+      .section
+        h3 Datos del cliente
+        .grid.grid-cliente
+          // Columna izquierda: campos
+          .col
+            label(for="clienteNombre") Nombre del cliente
+            input#clienteNombre(type="text" name="clienteNombre" required placeholder="Ej. Juan Pérez")
+
+            label(for="telefono1") Teléfono 1
+            input#telefono1(type="tel" name="telefono1" required placeholder="Ej. 867-123-4567")
+
+            label(for="telefono2") Teléfono 2 (opcional)
+            input#telefono2(type="tel" name="telefono2" placeholder="Ej. 867-987-6543")
+
+          // Columna derecha: logo
+          .col.logo-col
+            img.logo(src="/images/logo-master.jpg" alt="Master Servicio Automotriz")
+
+      // ====== Sección: Datos del vehículo ======
+      .section
+        h3 Datos del vehículo
+        .grid
+          .col
+            label(for="marca") Marca
+            input#marca(type="text" name="marca" required placeholder="Ej. Nissan")
+
+          .col
+            label(for="modelo") Modelo
+            input#modelo(type="text" name="modelo" required placeholder="Ej. Altima")
+
+          .col
+            label(for="anio") Año
+            input#anio(type="number" name="anio" min="1950" max="2100" required placeholder="Ej. 2017")
+
+          .col
+            label(for="color") Color
+            input#color(type="text" name="color" required placeholder="Ej. Negro")
+
+          //- Falla
+          .col.span2
+            label(for="falla") Falla del auto 
+            textarea#falla(name="falla" required placeholder="Describe la falla...")
+
+      .actions
+        button.btn(type="submit") Agregar a la lista
+        button.btn.secondary(type="button" id="btn-limpiar") Limpiar
+
+    // Mensaje de feedback solo cuando hay formulario
+    p#msg-orden
+
+  // ====== LISTA / TABLA (ADMIN Y EMPLEADOS) ======
+  .cards
+    .card#card-lista-hoy
+      // Header flexible: título + botón pantalla completa a la derecha
+      .card-header-flex.d-flex.justify-content-between.align-items-center.mb-2
+        h3.mb-0 Lista de vehículos hoy
+        button#btn-fullscreen-hoy.btn.btn-primary.btn-sm(
+          type="button"
+          title="Ver solo la lista en pantalla completa"
+        ) ⛶
+
+      p.note Los datos capturados hoy se muestran aquí.
+
+      .table-responsive
+        table.table#tabla-vehiculos
+          thead
+            tr
+              th #
+              th Cliente
+              th Marca / Modelo / Año / Color
+              th Falla
+              th Estado
+              th(style="width:240px") Acciones
+          tbody#tabla-lista
+            //- Filas generadas desde /js/recepcion.js
+
+  // ================= Template de fila + panel de detalles =================
+  template#tpl-fila
+    //- === Fila principal (marcadores con clases .slot-*) ===
+    tr
+      td.slot-idx 1
+      td.slot-cliente Juan Pérez
+      td
+        strong.slot-auto Nissan Altima 2017 — Negro
+      td.slot-falla No enciende
+      td
+        span.badge.slot-estado Recibido
+      td.actions-row
+        button.btn.secondary.btn-sm.toggle-detalle(data-id="__ID__") Más info
+        button.btn.btn-danger.btn-sm.borrar(data-id="__ID__") Borrar
+
+    //- === Panel de detalle (plegado) ===
+    tr.row-details(hidden)
+      td(colspan="6")
+        .details(data-id="__ID__" hidden)
+          // --------- FILA 1: CLIENTE + VEHÍCULO ---------
+          .details-grid
+            // ----- TARJETA: CLIENTE -----
+            .details-card.details-card--cliente
+              h5
+                i.bi.bi-person-fill.me-1
+                | Datos del cliente
+              p
+                strong Nombre:
+                |  
+                span.slot-det-cliente __CLIENTE__
+              p
+                strong Teléfono 1:
+                |  
+                span.slot-det-tel1 __TEL1__
+              p
+                strong Teléfono 2:
+                |  
+                span.slot-det-tel2 __TEL2__
+
+            // ----- TARJETA: VEHÍCULO + VIN -----
+            .details-card.details-card--vehiculo
+              h5
+                i.bi.bi-car-front-fill.me-1
+                | Datos del vehículo
+              p
+                strong Marca:
+                |  
+                span.slot-det-marca __MARCA__
+              p
+                strong Modelo:
+                |  
+                span.slot-det-modelo __MODELO__
+              p
+                strong Año:
+                |  
+                span.slot-det-anio __ANIO__
+              p
+                strong Color:
+                |  
+                span.slot-det-color __COLOR__
+
+              p.mb-1.mt-2
+                strong VIN actual:
+                |  
+                span.slot-det-vin __VIN__
+              label.form-label.mb-1(for="vin-__ID__") Capturar / editar VIN
+              input.form-control.form-control-sm.vin-input(
+                id="vin-__ID__"
+                type="text"
+                placeholder="Ej. 1HGCM82633A004352"
+                value="__VIN__"
+                data-id="__ID__"
+              )
+
+          // --------- FILA 2: SERVICIO / ESTADO + SEGUIMIENTO ---------
+          .details-grid.mt-2
+            // ----- TARJETA: SERVICIO / ESTADO -----
+            .details-card.details-card--servicio
+              h5
+                i.bi.bi-wrench-adjustable.me-1
+                | Servicio
+              p
+                strong Falla reportada:
+                |  
+                span.slot-det-falla
+              p.mt-2
+                strong Estado actual:
+                |  
+                span.badge.ms-2.slot-estado Recibido
+
+              .form-group.mt-2
+                label.form-label.mb-1 Cambiar estado
+                select.form-select.form-select-sm.estado-select(data-id="__ID__")
+                  option Recibido
+                  option Diagnóstico
+                  option En espera de refacciones
+                  option Reparación
+                  option Listo
+                  option Entregado
+
+            // ----- TARJETA: COBRO / MECÁNICO -----
+            .details-card.details-card--seguimiento
+              h5
+                i.bi.bi-clipboard-check.me-1
+                | Seguimiento
+              if user && user.role === 'admin'
+                label.form-label.mb-1 Presupuesto / Cobro
+                textarea.form-control.form-control-sm.cobro-input(
+                  rows="3"
+                  data-id="__ID__"
+                )
+                label.form-label.mt-2.mb-1 Mecánico que reparó
+                input.form-control.form-control-sm.mecanico-input(
+                  type="text"
+                  data-id="__ID__"
+                )
+              else
+                label.form-label.mb-1 Mecánico que reparó
+                input.form-control.form-control-sm.mecanico-input(
+                  type="text"
+                  data-id="__ID__"
+                )
+
+          // --------- FILA 3: FOTOS ---------
+          h5.mt-3
+            i.bi.bi-camera-fill.me-1
+            | Evidencia fotográfica
+          .details-grid
+            // Subir / tomar fotos
+            .details-card.details-card--fotos
+              .form-group.mb-2
+                label.form-label.mb-1(for="fotos-__ID__") Seleccionar fotos (galería)
+                input.form-control.form-control-sm.fotos-input(
+                  id="fotos-__ID__"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  multiple
+                  data-id="__ID__"
+                )
+
+              .flex.gap-2.mb-2
+                button.btn.btn-sm.cam-abrir(type="button" data-id="__ID__") Abrir cámara
+                button.btn.btn-sm.cam-foto(type="button" data-id="__ID__" disabled) Tomar foto
+
+              video.cam-preview(
+                autoplay
+                playsinline
+                style="max-width:260px; display:none"
+                data-id="__ID__"
+              )
+
+            // Galería
+            .details-card.details-card--galeria
+              .fotos-grid(data-id="__ID__")
+                //- Placeholder; el JS reemplaza este contenido
+                p.text-muted.small(data-placeholder="no-fotos") Sin fotos aún.
+
+          .details-foot.mt-3
+            button.btn.btn-sm.guardar-cambios(data-id="__ID__") Guardar
+            span.ms-2.text-success.small.save-ok.d-none(data-id="__ID__") Guardado ✓
+            span.ms-2.text-danger.small.save-err.d-none(data-id="__ID__") Error al guardar
+
+  // ====== Scripts (versiones nuevas para romper caché) ======
+  script(src="/js/main.js?v=8" defer)
+  script(src="/js/recepcion.js?v=10" defer)

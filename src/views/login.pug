@@ -1,0 +1,18 @@
+//- src/views/login.pug
+extends layout
+
+block content
+  .container.mt-5(style="max-width: 460px;")
+    h2.mb-4.text-center Iniciar sesión
+    if error
+      .alert.alert-danger.text-center #{error}
+    form(method="POST" action="/login" autocomplete="off")
+      .mb-3
+        label.form-label(for="username") Usuario
+        input.form-control(type="text" name="username" id="username" placeholder="Usuario" required autofocus)
+      .mb-3
+        label.form-label(for="password") Contraseña
+        input.form-control(type="password" name="password" id="password" placeholder="Contraseña" required)
+      button.btn.btn-primary.w-100(type="submit")
+        i.bi.bi-box-arrow-in-right.me-1
+        | Entrar
