@@ -21,6 +21,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// Railway asigna su propio puerto
 const PORT = process.env.PORT || 3000;
 
 /* ---------------------- Hardening ---------------------- */
@@ -40,15 +42,14 @@ app.use(
 );
 
 /* ---------------------- Middlewares base ---------------------- */
-app.use(express.json({ limit: "10mb" })); // JSON para API
-app.use(express.urlencoded({ extended: true, limit: "10mb" })); // forms
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 /* ---------------------- Usuario en req y en vistas ---------------------- */
-app.use(sessionUser);       // req.user desde la sesión
-app.use(exposeUserToViews); // res.locals.user en Pug
+app.use(sessionUser);
+app.use(exposeUserToViews);
 
 /* ---------------------- Archivos estáticos ---------------------- */
-// /js, /css, imágenes de tu frontend
 app.use(
   express.static(path.join(__dirname, "src", "public"), {
     maxAge: "7d",
@@ -57,7 +58,7 @@ app.use(
     },
   })
 );
-// Archivos subidos (fotos, audios de órdenes)
+
 app.use(
   "/uploads",
   express.static(path.join(__dirname, "uploads"), { maxAge: "1d" })
@@ -92,19 +93,15 @@ app.get("/recepcion", ensureAuth, (req, res) =>
 );
 
 /* ---------------------- Ajustes (protegido) ---------------------- */
-// Aquí cuelga lo de crear usuarios, etc.
-// Dentro de ajustes.routes.js ya puedes filtrar por rol admin.
 app.use("/ajustes", ensureAuth, ajustesRoutes);
 
 /* ---------------------- API (protegido) ---------------------- */
-// Todo el API de órdenes bajo /api/ordenes
 app.use("/api/ordenes", ensureAuth, ordenesRoutes);
 
-/* ---------------------- Utilidades ---------------------- */
+/* ---------------------- Healthcheck ---------------------- */
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-/* ---------------------- 404 y errores ---------------------- */
-// 404 (páginas no encontradas)
+/* ---------------------- Errores ---------------------- */
 app.use((req, res) => {
   if (req.path.startsWith("/api/")) {
     return res.status(404).json({ error: "No encontrado" });
@@ -112,11 +109,10 @@ app.use((req, res) => {
   res.status(404).render("404", { title: "No encontrado" });
 });
 
-// Handler de errores
-// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, _next) => {
   console.error("Error no controlado:", err);
   if (res.headersSent) return;
+
   if (req?.path?.startsWith?.("/api/")) {
     return res.status(500).json({ error: "Error interno del servidor" });
   }
@@ -124,6 +120,7 @@ app.use((err, req, res, _next) => {
 });
 
 /* ---------------------- Inicio del servidor ---------------------- */
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en http://localhost:${PORT}`);
+// Railway usa "0.0.0.0" como host
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Servidor corriendo en puerto ${PORT}`);
 });
