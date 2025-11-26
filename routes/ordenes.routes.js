@@ -168,9 +168,9 @@ router.post(
 );
 
 /* ===========================================================================================
-   GET /hoy        (Lista de órdenes NO ENTREGADAS)
-   Ahora muestra todas las órdenes cuyo estado NO es "Entregado",
-   sin importar si entraron hoy o días anteriores.
+   GET /hoy        (Lista de órdenes para recepción)
+   - Muestra TODAS las órdenes de HOY (aunque estén ENTREGADAS)
+   - Muestra órdenes de días anteriores SOLO si NO están ENTREGADAS
 =========================================================================================== */
 router.get(
   "/hoy",
@@ -192,7 +192,12 @@ router.get(
          FROM ordenes o
          JOIN vehiculos v ON v.id_vehiculo = o.id_vehiculo
          JOIN clientes  c ON c.id_cliente  = v.id_cliente
-         WHERE o.id_estatus <> 6               -- 👈 Distinto de "Entregado"
+         WHERE
+           -- 1) Órdenes de HOY (cualquier estado)
+           o.fecha_ingreso = CURDATE()
+           OR
+           -- 2) Órdenes de días ANTERIORES que NO estén entregadas
+           (o.fecha_ingreso < CURDATE() AND o.id_estatus <> 6)
          ORDER BY o.fecha_ingreso DESC,
                   o.hora_ingreso  DESC`
       );
@@ -205,6 +210,7 @@ router.get(
     }
   }
 );
+
 
 
 /* ===========================================================================================
