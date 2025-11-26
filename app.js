@@ -119,8 +119,7 @@ app.use((err, req, res, _next) => {
   res.status(500).render("500", { title: "Error interno" });
 });
 
-/* ---------------------- Inicio del servidor ---------------------- */
-// Railway usa "0.0.0.0" como host
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
 });

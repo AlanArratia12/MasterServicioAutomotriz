@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from "uuid";
 import { pool } from "../db.js";
 import { actualizarOrden } from "../src/controllers/ordenes.controller.js";
 import { ensureRole } from "../src/middlewares/auth.js";
-import cloudinary from "../src/lib/cloudinary.js"; // 👈 Cloudinary
+import cloudinary from "../src/lib/cloudinary.js";
 
 const router = Router();
 
@@ -168,7 +168,9 @@ router.post(
 );
 
 /* ===========================================================================================
-   GET /hoy        (Lista de órdenes del día actual)
+   GET /hoy        (Lista de órdenes NO ENTREGADAS)
+   Ahora muestra todas las órdenes cuyo estado NO es "Entregado",
+   sin importar si entraron hoy o días anteriores.
 =========================================================================================== */
 router.get(
   "/hoy",
@@ -190,8 +192,9 @@ router.get(
          FROM ordenes o
          JOIN vehiculos v ON v.id_vehiculo = o.id_vehiculo
          JOIN clientes  c ON c.id_cliente  = v.id_cliente
-         WHERE o.fecha_ingreso = CURDATE()
-         ORDER BY o.hora_ingreso DESC`
+         WHERE o.id_estatus <> 6               -- 👈 Distinto de "Entregado"
+         ORDER BY o.fecha_ingreso DESC,
+                  o.hora_ingreso  DESC`
       );
       res.json(rows);
     } catch (e) {
@@ -202,6 +205,7 @@ router.get(
     }
   }
 );
+
 
 /* ===========================================================================================
    🔹 GET /historial  (Búsquedas + PAGINACIÓN)
