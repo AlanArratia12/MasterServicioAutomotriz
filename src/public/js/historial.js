@@ -378,6 +378,7 @@
     const btnDelFoto = e.target.closest(".del-foto");
     const btnCamOn   = e.target.closest(".cam-abrir");
     const btnShot    = e.target.closest(".cam-foto");
+    const btnCancel  = e.target.closest(".cam-cancel"); // NUEVO
 
     // 1) Abrir / cerrar panel de detalle
     if (btn) {
@@ -416,8 +417,13 @@
           v.srcObject = null;
           v.style.display = "none";
         }
-        const shotBtn = $(`.cam-foto[data-id="${id}"]`);
-        if (shotBtn) shotBtn.disabled = true;
+        const shotBtn   = $(`.cam-foto[data-id="${id}"]`);
+        const cancelBtn = $(`.cam-cancel[data-id="${id}"]`);
+        const camOnBtn  = $(`.cam-abrir[data-id="${id}"]`);
+
+        if (shotBtn)   shotBtn.disabled   = true;
+        if (cancelBtn) cancelBtn.disabled = true;
+        if (camOnBtn)  camOnBtn.disabled  = false;
       }
       return;
     }
@@ -427,13 +433,14 @@
       const id      = btnCamOn.dataset.id;
       const v       = $(`video.cam-preview[data-id="${id}"]`);
       const shotBtn = $(`.cam-foto[data-id="${id}"]`);
+      const cancelBtn = $(`.cam-cancel[data-id="${id}"]`);
 
-      if (!v || !shotBtn) {
-        alert("No se encontró el video o el botón de foto para la orden " + id);
+      if (!v || !shotBtn || !cancelBtn) {
+        alert("No se encontró el video o los botones de cámara para la orden " + id);
         console.error(
-          "cam-abrir: no se encontró video.cam-preview o .cam-foto para id",
+          "cam-abrir: faltan elementos para id",
           id,
-          { v, shotBtn }
+          { v, shotBtn, cancelBtn }
         );
         return;
       }
@@ -444,7 +451,9 @@
         });
         v.srcObject = stream;
         v.style.display = "block";
-        shotBtn.disabled = false;
+        shotBtn.disabled   = false;
+        cancelBtn.disabled = false;
+        btnCamOn.disabled  = true;
 
         const S = CAM.get(id) || { stream: null, captures: [] };
         if (S.stream) S.stream.getTracks().forEach((t) => t.stop());
@@ -500,6 +509,33 @@
         "image/jpeg",
         0.92
       );
+      return;
+    }
+
+    // 3.5) CANCELAR CÁMARA (nuevo)
+    if (btnCancel) {
+      const id = btnCancel.dataset.id;
+      const v  = $(`video.cam-preview[data-id="${id}"]`);
+      const S  = CAM.get(id);
+
+      if (S?.stream) {
+        S.stream.getTracks().forEach((t) => t.stop());
+        S.stream = null;
+        CAM.set(id, S);
+      }
+
+      if (v) {
+        v.srcObject = null;
+        v.style.display = "none";
+      }
+
+      const shotBtn  = $(`.cam-foto[data-id="${id}"]`);
+      const camOnBtn = $(`.cam-abrir[data-id="${id}"]`);
+
+      if (shotBtn)  shotBtn.disabled  = true;
+      if (camOnBtn) camOnBtn.disabled = false;
+
+      btnCancel.disabled = true;
       return;
     }
 

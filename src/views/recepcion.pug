@@ -98,7 +98,8 @@ block content
         span.badge.slot-estado Recibido
       td.actions-row
         button.btn.secondary.btn-sm.toggle-detalle(data-id="__ID__") Más info
-        button.btn.btn-danger.btn-sm.borrar(data-id="__ID__") Borrar
+        // *** le agregamos ms-2 para separar el botón Borrar ***
+        button.btn.btn-danger.btn-sm.ms-2.borrar(data-id="__ID__") Borrar
 
     //- === Panel de detalle (plegado) ===
     tr.row-details(hidden)
@@ -228,6 +229,12 @@ block content
               .flex.gap-2.mb-2
                 button.btn.btn-sm.cam-abrir(type="button" data-id="__ID__") Abrir cámara
                 button.btn.btn-sm.cam-foto(type="button" data-id="__ID__" disabled) Tomar foto
+                // *** NUEVO botón para poder cerrar la cámara sin guardar ***
+                button.btn.btn-sm.btn-outline-secondary.cam-cancel(
+                  type="button"
+                  data-id="__ID__"
+                  disabled
+                ) Cancelar cámara
 
               video.cam-preview(
                 autoplay

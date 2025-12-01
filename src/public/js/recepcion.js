@@ -307,6 +307,7 @@
     const btnBorrar  = e.target.closest(".borrar");
     const btnCamOn   = e.target.closest(".cam-abrir");
     const btnShot    = e.target.closest(".cam-foto");
+    const btnCancel  = e.target.closest(".cam-cancel"); // NUEVO
 
     if (btnToggle) {
       const id = btnToggle.dataset.id;
@@ -339,6 +340,10 @@
         if (v) { v.srcObject = null; v.style.display = "none"; }
         const shotBtn = $(`.cam-foto[data-id="${id}"]`);
         if (shotBtn) shotBtn.disabled = true;
+        const cancelBtn = $(`.cam-cancel[data-id="${id}"]`);
+        if (cancelBtn) cancelBtn.disabled = true;
+        const camOnBtn = $(`.cam-abrir[data-id="${id}"]`);
+        if (camOnBtn) camOnBtn.disabled = false;
       }
       return;
     }
@@ -347,13 +352,22 @@
       const id = btnCamOn.dataset.id;
       const v = $(`video.cam-preview[data-id="${id}"]`);
       const shotBtn = $(`.cam-foto[data-id="${id}"]`);
+      const cancelBtn = $(`.cam-cancel[data-id="${id}"]`);
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-        v.srcObject = stream; v.style.display = "block"; shotBtn.disabled = false;
+        v.srcObject = stream;
+        v.style.display = "block";
+        if (shotBtn) shotBtn.disabled = false;
+        if (cancelBtn) cancelBtn.disabled = false;
+        btnCamOn.disabled = true;
+
         const S = CAM.get(id) || { stream:null, captures:[] };
         if (S.stream) S.stream.getTracks().forEach(t => t.stop());
         S.stream = stream; CAM.set(id, S);
-      } catch (err) { console.error(err); alert("No se pudo abrir la cámara"); }
+      } catch (err) {
+        console.error(err);
+        alert("No se pudo abrir la cámara");
+      }
       return;
     }
 
@@ -381,6 +395,33 @@
           grid.appendChild(img);
         }
       }, "image/jpeg", 0.92);
+      return;
+    }
+
+    // NUEVO: cancelar cámara sin guardar
+    if (btnCancel) {
+      const id = btnCancel.dataset.id;
+      const v = $(`video.cam-preview[data-id="${id}"]`);
+      const S = CAM.get(id);
+
+      if (S?.stream) {
+        S.stream.getTracks().forEach(t => t.stop());
+        S.stream = null;
+        CAM.set(id, S);
+      }
+
+      if (v) {
+        v.srcObject = null;
+        v.style.display = "none";
+      }
+
+      const shotBtn = $(`.cam-foto[data-id="${id}"]`);
+      if (shotBtn) shotBtn.disabled = true;
+
+      const camOnBtn = $(`.cam-abrir[data-id="${id}"]`);
+      if (camOnBtn) camOnBtn.disabled = false;
+
+      btnCancel.disabled = true;
       return;
     }
 
