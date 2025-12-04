@@ -52,8 +52,8 @@ router.post("/usuarios", ensureRole("admin"), async (req, res) => {
     const hash = await bcrypt.hash(password.trim(), 10);
 
     const [result] = await pool.query(
-      "INSERT INTO usuarios (nombre, username, password, role) VALUES (?, ?, ?, ?)",
-      [nombre.trim(), username.trim(), hash, role.trim()]
+      "INSERT INTO usuarios (nombre, username, role, password_hash) VALUES (?, ?, ?, ?)",
+      [nombre.trim(), username.trim(), role.trim(), hash]
     );
 
     return res.json({
@@ -141,7 +141,7 @@ router.patch("/usuarios/:id/pass", ensureRole("admin"), async (req, res) => {
     const hash = await bcrypt.hash(password.trim(), 10);
 
     const [r] = await pool.query(
-      "UPDATE usuarios SET password = ? WHERE id = ?",
+      "UPDATE usuarios SET password_hash = ? WHERE id = ?",
       [hash, id]
     );
 

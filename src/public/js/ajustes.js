@@ -18,7 +18,6 @@
     modal = new bootstrap.Modal(modalEl);
   }
 
-  // Construir una fila de usuario para la tabla
   function crearFila(usuario) {
     const tr = document.createElement("tr");
     tr.dataset.id = usuario.id;
@@ -44,9 +43,7 @@
     return tr;
   }
 
-  // ==============================
-  //   CREAR NUEVO USUARIO
-  // ==============================
+  // ===== CREAR NUEVO USUARIO =====
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
 
@@ -86,9 +83,7 @@
     }
   });
 
-  // ==============================
-  //   CAMBIAR ROL DESDE LA TABLA
-  // ==============================
+  // ===== CAMBIAR ROL DESDE LA TABLA =====
   tbody?.addEventListener("change", async (e) => {
     const sel = e.target.closest(".sel-role");
     if (!sel) return;
@@ -116,9 +111,7 @@
     }
   });
 
-  // ==============================
-  //   BOTONES ELIMINAR / CAMBIAR PASS
-  // ==============================
+  // ===== BOTONES ELIMINAR / CAMBIAR PASS =====
   tbody?.addEventListener("click", async (e) => {
     const btnDel  = e.target.closest(".btn-del");
     const btnPass = e.target.closest(".btn-pass");
@@ -156,9 +149,7 @@
     }
   });
 
-  // ==============================
-  //   GUARDAR NUEVA CONTRASEÑA
-  // ==============================
+  // ===== GUARDAR NUEVA CONTRASEÑA =====
   btnSave?.addEventListener("click", async () => {
     const id = passId.value.trim();
     const p1 = passNew.value.trim();
