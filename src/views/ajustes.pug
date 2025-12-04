@@ -1,3 +1,4 @@
+//- src/views/ajustes.pug
 extends layout
 
 block content
@@ -68,12 +69,15 @@ block content
                       option(value="admin" selected=(u.role === 'admin')) Admin
                       option(value="empleado" selected=(u.role === 'empleado')) Empleado
                   td
+                    // Siempre puede cambiar contraseña
                     button.btn.btn-sm.btn-outline-primary.btn-pass(type="button")
                       i.bi.bi-key.me-1
                       | Cambiar pass
-                    button.btn.btn-sm.btn-outline-danger.btn-del(type="button")
-                      i.bi.bi-trash.me-1
-                      | Eliminar
+                    // Solo mostrar "Eliminar" si NO es la cuenta admin
+                    if u.username !== 'admin'
+                      button.btn.btn-sm.btn-outline-danger.ms-2.btn-del(type="button")
+                        i.bi.bi-trash.me-1
+                        | Eliminar
       else
         p.text-muted No hay usuarios registrados (además del actual).
 
