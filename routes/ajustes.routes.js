@@ -38,6 +38,11 @@ router.post("/usuarios", ensureRole("admin"), async (req, res) => {
     return res.status(400).json({ error: "Todos los campos son obligatorios." });
   }
 
+  // Solo permitir admin o empleado
+  if (!["admin", "empleado"].includes(role.trim())) {
+    return res.status(400).json({ error: "Rol inválido." });
+  }
+
   try {
     // Verificar si ya existe ese username
     const [[existe]] = await pool.query(
@@ -84,8 +89,27 @@ router.patch("/usuarios/:id/role", ensureRole("admin"), async (req, res) => {
   if (!role.trim()) {
     return res.status(400).json({ error: "Rol requerido." });
   }
+  if (!["admin", "empleado"].includes(role.trim())) {
+    return res.status(400).json({ error: "Rol inválido." });
+  }
 
   try {
+    const [[user]] = await pool.query(
+      "SELECT username, role FROM usuarios WHERE id = ?",
+      [id]
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: "Usuario no encontrado." });
+    }
+
+    // No permitir cambiar el rol de la cuenta principal admin
+    if (user.username === "admin" && user.role === "admin") {
+      return res
+        .status(400)
+        .json({ error: "No se puede cambiar el rol de la cuenta de administrador." });
+    }
+
     const [r] = await pool.query("UPDATE usuarios SET role = ? WHERE id = ?", [
       role.trim(),
       id,
@@ -112,6 +136,22 @@ router.delete("/usuarios/:id", ensureRole("admin"), async (req, res) => {
   const { id } = req.params;
 
   try {
+    const [[user]] = await pool.query(
+      "SELECT username, role FROM usuarios WHERE id = ?",
+      [id]
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: "Usuario no encontrado." });
+    }
+
+    // No permitir borrar la cuenta principal admin
+    if (user.username === "admin" && user.role === "admin") {
+      return res
+        .status(400)
+        .json({ error: "No se puede eliminar la cuenta de administrador." });
+    }
+
     const [r] = await pool.query("DELETE FROM usuarios WHERE id = ?", [id]);
 
     if (r.affectedRows === 0) {

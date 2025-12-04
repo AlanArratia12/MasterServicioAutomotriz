@@ -55,10 +55,11 @@ const uploadAudio = multer({
 
 /* ===========================================================================================
    POST /   -> Crear: cliente NUEVO -> vehiculo -> orden (+ audio opcional)
+   (admin y empleado pueden capturar recepción)
 =========================================================================================== */
 router.post(
   "/",
-  ensureRole(["admin", "capturista"]),
+  ensureRole(["admin", "empleado"]),
   uploadAudio.single("audios"),
   async (req, res) => {
     const {
@@ -117,7 +118,7 @@ router.post(
       );
       const id_orden = ordResult.insertId;
 
-      // 4) Audio opcional (si algún día lo usas)
+      // 4) Audio opcional
       if (req.file) {
         const dirOrden = path.join(
           "uploads",
@@ -170,7 +171,7 @@ router.post(
 // ====== LISTA DE HOY (y pendientes de días anteriores) ======
 router.get(
   "/hoy",
-  ensureRole(["admin", "capturista", "consulta", "empleado"]),
+  ensureRole(["admin", "empleado"]),
   async (_req, res) => {
     try {
       const [rows] = await pool.query(
@@ -210,9 +211,6 @@ router.get(
     }
   }
 );
-
-
-
 
 /* ===========================================================================================
    🔹 GET /historial  (Búsquedas + PAGINACIÓN)
@@ -338,7 +336,7 @@ router.get("/historial", async (req, res) => {
 =========================================================================================== */
 router.get(
   "/:id",
-  ensureRole(["admin", "capturista", "consulta"]),
+  ensureRole(["admin", "empleado"]),
   async (req, res) => {
     const { id } = req.params;
     try {
@@ -376,7 +374,7 @@ router.get(
 =========================================================================================== */
 router.patch(
   "/:id",
-  ensureRole(["admin", "capturista"]),
+  ensureRole(["admin", "empleado"]),
   async (req, res) => {
     try {
       await actualizarOrden(req, res);
@@ -394,7 +392,7 @@ router.patch(
 =========================================================================================== */
 router.get(
   "/:id/fotos",
-  ensureRole(["admin", "capturista", "consulta"]),
+  ensureRole(["admin", "empleado"]),
   async (req, res) => {
     const { id } = req.params;
     try {
@@ -437,7 +435,7 @@ const uploadFotos = multer({
 
 router.post(
   "/:id/fotos",
-  ensureRole(["admin", "capturista"]),
+  ensureRole(["admin", "empleado"]),
   uploadFotos.array("fotos"),
   async (req, res) => {
     const { id } = req.params;
@@ -499,10 +497,11 @@ router.post(
 
 /* ===========================================================================================
    DELETE /fotos/:id   (Eliminar una foto individual de Cloudinary y BD)
+   Solo admin
 =========================================================================================== */
 router.delete(
   "/fotos/:id",
-  ensureRole(["admin", "capturista"]),
+  ensureRole(["admin"]),
   async (req, res) => {
     const { id } = req.params;
     const conn = await pool.getConnection();
@@ -550,6 +549,7 @@ router.delete(
 
 /* ===========================================================================================
    DELETE /:id         (Eliminar completamente una orden + sus fotos en BD)
+   Solo admin
 =========================================================================================== */
 router.delete(
   "/:id",

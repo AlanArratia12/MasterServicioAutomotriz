@@ -5,7 +5,6 @@
   const form  = $("#form-user");
   const tbody = document.querySelector("table.table tbody");
 
-  // Modal cambiar contraseña (Bootstrap)
   const modalEl   = $("#modalPass");
   const passId    = $("#pass-user-id");
   const passNew   = $("#pass-new");
@@ -28,10 +27,8 @@
       <td>${usuario.username}</td>
       <td>
         <select class="form-select form-select-sm sel-role">
-          <option value="admin" ${usuario.role === "admin" ? "selected" : ""}>Admin</option>
-          <option value="capturista" ${usuario.role === "capturista" ? "selected" : ""}>Capturista</option>
+          <option value="admin"   ${usuario.role === "admin" ? "selected" : ""}>Admin</option>
           <option value="empleado" ${usuario.role === "empleado" ? "selected" : ""}>Empleado</option>
-          <option value="consulta" ${usuario.role === "consulta" ? "selected" : ""}>Consulta</option>
         </select>
       </td>
       <td>
@@ -43,7 +40,7 @@
     return tr;
   }
 
-  // ===== CREAR NUEVO USUARIO =====
+  // CREAR NUEVO USUARIO
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
 
@@ -83,7 +80,7 @@
     }
   });
 
-  // ===== CAMBIAR ROL DESDE LA TABLA =====
+  // CAMBIAR ROL
   tbody?.addEventListener("change", async (e) => {
     const sel = e.target.closest(".sel-role");
     if (!sel) return;
@@ -111,7 +108,7 @@
     }
   });
 
-  // ===== BOTONES ELIMINAR / CAMBIAR PASS =====
+  // BOTONES (ELIMINAR / CAMBIAR PASS)
   tbody?.addEventListener("click", async (e) => {
     const btnDel  = e.target.closest(".btn-del");
     const btnPass = e.target.closest(".btn-pass");
@@ -120,7 +117,6 @@
 
     if (!id) return;
 
-    // Eliminar usuario
     if (btnDel) {
       if (!confirm("¿Seguro que deseas eliminar este usuario?")) return;
 
@@ -138,7 +134,6 @@
       }
     }
 
-    // Abrir modal cambiar contraseña
     if (btnPass) {
       passId.value = id;
       passNew.value = "";
@@ -149,7 +144,7 @@
     }
   });
 
-  // ===== GUARDAR NUEVA CONTRASEÑA =====
+  // GUARDAR NUEVA CONTRASEÑA
   btnSave?.addEventListener("click", async () => {
     const id = passId.value.trim();
     const p1 = passNew.value.trim();

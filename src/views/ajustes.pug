@@ -1,11 +1,9 @@
-//- src/views/ajustes.pug
 extends layout
 
 block content
   h1 Ajustes
   p.lead Sección solo para el usuario administrador.
 
-  // ======== TARJETA USUARIOS ========
   .card.mt-4
     .card-body
       h3.h5.mb-3 Usuarios
@@ -26,7 +24,7 @@ block content
           input#username.form-control(
             type="text"
             name="username"
-            placeholder="Ej. alan"
+            placeholder="Ej. admin"
             required
           )
         .col-md-3
@@ -41,9 +39,7 @@ block content
           label.form-label(for="role") Rol
           select#role.form-select(name="role" required)
             option(value="admin") Admin
-            option(value="capturista") Capturista
             option(value="empleado") Empleado
-            option(value="consulta") Consulta
 
         .col-12
           button.btn.btn-primary(type="submit")
@@ -70,9 +66,7 @@ block content
                   td
                     select.form-select.form-select-sm.sel-role
                       option(value="admin" selected=(u.role === 'admin')) Admin
-                      option(value="capturista" selected=(u.role === 'capturista')) Capturista
                       option(value="empleado" selected=(u.role === 'empleado')) Empleado
-                      option(value="consulta" selected=(u.role === 'consulta')) Consulta
                   td
                     button.btn.btn-sm.btn-outline-primary.btn-pass(type="button")
                       i.bi.bi-key.me-1
@@ -110,5 +104,4 @@ block content
           button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Cancelar
           button.btn.btn-primary#btn-save-pass(type="button") Guardar
 
-  // ===== Script específico de esta vista =====
-  script(src="/js/ajustes.js?v=1" defer)
+  script(src="/js/ajustes.js?v=2" defer)
