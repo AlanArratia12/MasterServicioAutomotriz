@@ -167,14 +167,10 @@ router.post(
   }
 );
 
-/* ===========================================================================================
-   GET /hoy        (Lista de órdenes para recepción)
-   - Muestra TODAS las órdenes de HOY (aunque estén ENTREGADAS)
-   - Muestra órdenes de días anteriores SOLO si NO están ENTREGADAS
-=========================================================================================== */
+// ====== LISTA DE HOY (y pendientes de días anteriores) ======
 router.get(
   "/hoy",
-  ensureRole(["admin", "capturista", "consulta"]),
+  ensureRole(["admin", "capturista", "consulta", "empleado"]),
   async (_req, res) => {
     try {
       const [rows] = await pool.query(
@@ -183,8 +179,13 @@ router.get(
            o.fecha_ingreso,
            DATE_FORMAT(o.hora_ingreso, '%H:%i') AS hora,
            c.nombre AS cliente,
-           c.telefono1, c.telefono2,
-           v.marca, v.modelo, v.anio, v.color, v.VIN,
+           c.telefono1, 
+           c.telefono2,
+           v.marca, 
+           v.modelo, 
+           v.anio, 
+           v.color, 
+           v.VIN,
            o.falla_reportada AS falla,
            o.cobro,
            o.mecanico,
@@ -198,18 +199,18 @@ router.get(
            OR
            -- 2) Órdenes de días ANTERIORES que NO estén entregadas
            (o.fecha_ingreso < CURDATE() AND o.id_estatus <> 6)
-         ORDER BY o.fecha_ingreso DESC,
-                  o.hora_ingreso  DESC`
+         ORDER BY 
+           o.fecha_ingreso DESC,
+           o.hora_ingreso  DESC`
       );
       res.json(rows);
     } catch (e) {
       console.error(e);
-      res
-        .status(500)
-        .json({ error: "No se pudo obtener la lista de hoy" });
+      res.status(500).json({ error: "No se pudo obtener la lista de hoy" });
     }
   }
 );
+
 
 
 

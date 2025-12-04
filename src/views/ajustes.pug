@@ -14,23 +14,21 @@ block content
       // ----- Formulario crear usuario -----
       form#form-user.row.g-3.mb-4
         .col-md-4
-          label.form-label(for="nombre") Nombre completo
+          label.form-label(for="nombre") Nombre
           input#nombre.form-control(
             type="text"
             name="nombre"
-            placeholder="Ej. Juan Pérez"
+            placeholder="Nombre completo"
             required
           )
-
         .col-md-3
           label.form-label(for="username") Usuario
           input#username.form-control(
             type="text"
             name="username"
-            placeholder="Ej. juan"
+            placeholder="Ej. alan"
             required
           )
-
         .col-md-3
           label.form-label(for="password") Contraseña
           input#password.form-control(
@@ -39,80 +37,69 @@ block content
             placeholder="Contraseña"
             required
           )
-
         .col-md-2
-          label.form-label(for="rol") Rol
-          select#rol.form-select(name="rol" required)
-            option(value="user" selected) Usuario
-            option(value="admin") Administrador
+          label.form-label(for="role") Rol
+          select#role.form-select(name="role" required)
+            option(value="admin") Admin
+            option(value="capturista") Capturista
+            option(value="empleado") Empleado
+            option(value="consulta") Consulta
 
-        .col-12.mt-2
+        .col-12
           button.btn.btn-primary(type="submit")
             i.bi.bi-person-plus.me-1
-            | Crear usuario
+            | Agregar usuario
 
       // ----- Tabla de usuarios -----
-      table.table.align-middle.mb-0
-        thead
-          tr
-            th #
-            th Usuario
-            th Nombre
-            th Rol
-            th Acciones
-        tbody
-          if !usuarios || usuarios.length === 0
-            tr
-              td(colspan="5").text-center.text-muted No hay usuarios registrados.
-          else
-            each u, idx in usuarios
+      if usuarios && usuarios.length
+        .table-responsive
+          table.table.table-sm.align-middle
+            thead
               tr
-                td #{idx + 1}
-                td #{u.username}
-                td #{u.nombre}
-                td
-                  if u.role === "admin"
-                    span.badge.bg-primary Administrador
-                  else
-                    span.badge.bg-secondary Usuario
-                td
-                  // Botón cambiar contraseña
-                  button.btn.btn-warning.btn-sm.me-2.btn-pass(
-                    type="button",
-                    data-id=u.id,
-                    data-username=u.username
-                  )
-                    i.bi.bi-key.me-1
-                    | Cambiar contraseña
-
-                  // Botón eliminar (no deja eliminarse a sí mismo)
-                  if u.username !== user.username
-                    button.btn.btn-danger.btn-sm.btn-eliminar(
-                      type="button",
-                      data-id=u.id
-                    )
+                th# ID
+                th Nombre
+                th Usuario
+                th Rol
+                th Acciones
+            tbody
+              each u in usuarios
+                tr(data-id=u.id)
+                  td= u.id
+                  td= u.nombre
+                  td= u.username
+                  td
+                    select.form-select.form-select-sm.sel-role
+                      option(value="admin" selected=(u.role === 'admin')) Admin
+                      option(value="capturista" selected=(u.role === 'capturista')) Capturista
+                      option(value="empleado" selected=(u.role === 'empleado')) Empleado
+                      option(value="consulta" selected=(u.role === 'consulta')) Consulta
+                  td
+                    button.btn.btn-sm.btn-outline-primary.btn-pass(type="button")
+                      i.bi.bi-key.me-1
+                      | Cambiar pass
+                    button.btn.btn-sm.btn-outline-danger.btn-del(type="button")
                       i.bi.bi-trash.me-1
                       | Eliminar
-                  else
-                    span.text-muted No puedes eliminar tu propio usuario.
+      else
+        p.text-muted No hay usuarios registrados (además del actual).
 
-  // ======== MODAL CAMBIAR CONTRASEÑA ========
-  #modalPass.modal.fade(tabindex="-1")
+  // ===== MODAL CAMBIAR CONTRASEÑA =====
+  .modal.fade#modalPass(tabindex="-1" aria-hidden="true")
     .modal-dialog
       .modal-content
         .modal-header
           h5.modal-title Cambiar contraseña
-          button.btn-close(type="button" data-bs-dismiss="modal")
+          button.btn-close(type="button" data-bs-dismiss="modal" aria-label="Cerrar")
         .modal-body
           input#pass-user-id(type="hidden")
           .mb-3
-            label.form-label Nueva contraseña
+            label.form-label(for="pass-new") Nueva contraseña
             input#pass-new.form-control(
               type="password"
               placeholder="Nueva contraseña"
             )
           .mb-3
-            label.form-label Confirmar contraseña
+            label.form-label(for="pass-confirm") Confirmar contraseña
             input#pass-confirm.form-control(
               type="password"
               placeholder="Confirmar contraseña"
