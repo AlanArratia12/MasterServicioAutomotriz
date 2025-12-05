@@ -12,13 +12,18 @@
   const cardLista = $("#card-lista-hoy");
   const btnFull   = $("#btn-fullscreen-hoy");
 
-  // === NUEVO: tbody de la tabla PENDIENTES ===
+  // Tabla de pendientes
   const tbodyPendientes = $("#tbody-pendientes");
 
   const CAM = new Map(); 
 
   const ESTADOS = [
-    "Recibido", "Diagnóstico", "En espera de refacciones", "Reparación", "Listo", "Entregado"
+    "Recibido",
+    "Diagnóstico",
+    "En espera de refacciones",
+    "Reparación",
+    "Listo",
+    "Entregado",
   ];
 
   const API = {
@@ -97,74 +102,87 @@
   function mapEstatus(id) {
     const num = Number(id);
     if (!isNaN(num) && num > 0) {
-      const m = { 1: "Recibido", 2: "Diagnóstico", 3: "En espera de refacciones", 4: "Reparación", 5: "Listo", 6: "Entregado" };
+      const m = {
+        1: "Recibido",
+        2: "Diagnóstico",
+        3: "En espera de refacciones",
+        4: "Reparación",
+        5: "Listo",
+        6: "Entregado",
+      };
       return m[num] || "Recibido";
     }
     return id || "Recibido";
   }
-  
+
   // LOGICA DE ESTILOS (Colores Hexadecimales Directos)
   function getEstatusStyles(id) {
-    // Definimos colores: Fondo (bg), Texto (fg), Borde (br)
-    let s = { bg: '#dbeafe', fg: '#1e3a8a', br: '#bfdbfe' }; // Azul (Recibido)
+    let s = { bg: "#dbeafe", fg: "#1e3a8a", br: "#bfdbfe" }; // Azul (Recibido)
 
     const num = Number(id);
     const text = String(id).toLowerCase();
 
-    // Lógica robusta: intenta por número, si falla intenta por texto
-    if ((!isNaN(num) && num === 1) || text.includes('recibido')) {
-         s = { bg: '#dbeafe', fg: '#1e3a8a', br: '#bfdbfe' }; // Azul
-    } 
-    else if ((!isNaN(num) && [2,3,4].includes(num)) || text.match(/diagn|espera|repara/)) {
-         s = { bg: '#fef3c7', fg: '#78350f', br: '#fde68a' }; // Ámbar/Naranja
+    if ((!isNaN(num) && num === 1) || text.includes("recibido")) {
+      s = { bg: "#dbeafe", fg: "#1e3a8a", br: "#bfdbfe" }; // Azul
+    } else if ((!isNaN(num) && [2, 3, 4].includes(num)) || text.match(/diagn|espera|repara/)) {
+      s = { bg: "#fef3c7", fg: "#78350f", br: "#fde68a" }; // Ámbar/Naranja
+    } else if ((!isNaN(num) && num === 5) || text.includes("listo")) {
+      s = { bg: "#dcfce7", fg: "#14532d", br: "#bbf7d0" }; // Verde
+    } else if ((!isNaN(num) && num === 6) || text.includes("entregado")) {
+      s = { bg: "#f3f4f6", fg: "#111827", br: "#d1d5db" }; // Gris
     }
-    else if ((!isNaN(num) && num === 5) || text.includes('listo')) {
-         s = { bg: '#dcfce7', fg: '#14532d', br: '#bbf7d0' }; // Verde
-    }
-    else if ((!isNaN(num) && num === 6) || text.includes('entregado')) {
-         s = { bg: '#f3f4f6', fg: '#111827', br: '#d1d5db' }; // Gris (Texto casi negro)
-    }
-    
+
     return s;
   }
 
   // Helper para crear el badge visualmente (usado en lista y en detalles)
   function createBadgeElement(texto, idOTextoOrigen) {
-      const estilo = getEstatusStyles(idOTextoOrigen);
-      const badge = document.createElement('span');
-      badge.textContent = texto;
-      
-      // Estilos inline blindados
-      badge.style.display = 'inline-block';
-      badge.style.padding = '5px 12px';
-      badge.style.borderRadius = '50px';
-      badge.style.fontSize = '12px';
-      badge.style.fontWeight = '800';
-      badge.style.textTransform = 'uppercase';
-      badge.style.whiteSpace = 'nowrap';
-      
-      badge.style.backgroundColor = estilo.bg;
-      badge.style.color = estilo.fg; 
-      badge.style.border = '1px solid ' + estilo.br;
-      
-      return badge;
+    const estilo = getEstatusStyles(idOTextoOrigen);
+    const badge = document.createElement("span");
+    badge.textContent = texto;
+
+    badge.style.display = "inline-block";
+    badge.style.padding = "5px 12px";
+    badge.style.borderRadius = "50px";
+    badge.style.fontSize = "12px";
+    badge.style.fontWeight = "800";
+    badge.style.textTransform = "uppercase";
+    badge.style.whiteSpace = "nowrap";
+
+    badge.style.backgroundColor = estilo.bg;
+    badge.style.color = estilo.fg;
+    badge.style.border = "1px solid " + estilo.br;
+
+    return badge;
   }
 
-  function fill(el, text) { if (el) el.textContent = text ?? ""; }
+  function fill(el, text) {
+    if (el) el.textContent = text ?? "";
+  }
 
-  // === NUEVO: helper para obtener texto de fecha de ingreso ===
+  // Fecha de ingreso: evita el problema de que se recorra un día
   function getFechaTexto(r) {
-    // ajusta el nombre del campo según tu API:
-    // idealmente SELECT DATE_FORMAT(fecha_ingreso, '%Y-%m-%d %H:%i:%s') AS fecha_ingreso
-    const raw = r.fecha_ingreso || r.created_at || r.fecha || r.fechaIngreso;
+    const raw =
+      r.fecha_ingreso || r.created_at || r.fecha || r.fechaIngreso;
     if (!raw) return "-";
-    const d = new Date(raw);
+
+    const str = String(raw);
+
+    // Si viene como 2025-12-04T00:00:00.000Z → tomamos solo la parte de fecha
+    const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) {
+      const [, y, mo, d] = m;
+      return `${d}/${mo}/${y}`; // 04/12/2025
+    }
+
+    // Fallback por si viene en otro formato
+    const d = new Date(str);
     if (!isNaN(d.getTime())) {
       const pad = (n) => String(n).padStart(2, "0");
       return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
     }
-    // Si viene ya formateado (por ejemplo '04/12/2025'), lo dejamos casi tal cual
-    return String(raw).slice(0, 16);
+
+    return str.slice(0, 16);
   }
 
   // ========= PINTAR LISTA PRINCIPAL =========
@@ -172,7 +190,6 @@
     if (!tbody) return;
     tbody.innerHTML = "";
     if (!rows?.length) {
-      // También limpiamos pendientes si no hay nada
       renderPendientes([]);
       return;
     }
@@ -180,97 +197,123 @@
     rows.forEach((r, idx) => {
       const frag = tpl.content.cloneNode(true);
 
-      fill(frag.querySelector(".slot-idx"),     String(idx + 1));
+      fill(frag.querySelector(".slot-idx"), String(idx + 1));
       fill(frag.querySelector(".slot-cliente"), r.cliente || "");
-      fill(frag.querySelector(".slot-auto"),    autoText(r));
-      fill(frag.querySelector(".slot-falla"),   r.falla || "");
-      
-      // 1. ESTADO EN LA FILA PRINCIPAL
+      fill(frag.querySelector(".slot-auto"), autoText(r));
+      fill(frag.querySelector(".slot-falla"), r.falla || "");
+
+      // Estado en la fila principal
       const estadoSlot = frag.querySelector(".slot-estado");
       if (estadoSlot) {
-          estadoSlot.textContent = '';
-          const texto = mapEstatus(r.id_estatus);
-          // Usamos el helper para crear el badge
-          estadoSlot.appendChild(createBadgeElement(texto, r.id_estatus || texto));
+        estadoSlot.textContent = "";
+        const texto = mapEstatus(r.id_estatus);
+        estadoSlot.appendChild(
+          createBadgeElement(texto, r.id_estatus || texto)
+        );
       }
 
-      frag.querySelectorAll("[data-id='__ID__']").forEach(n => n.setAttribute("data-id", r.id_orden));
+      frag
+        .querySelectorAll("[data-id='__ID__']")
+        .forEach((n) => n.setAttribute("data-id", r.id_orden));
       const det = frag.querySelector(".details");
       det?.setAttribute("data-id", r.id_orden);
 
-      fill(frag.querySelector(".slot-det-cliente"),   r.cliente || "");
-      fill(frag.querySelector(".slot-det-tel1"),      r.telefono1 || "");
-      fill(frag.querySelector(".slot-det-tel2"),      r.telefono2 || "-");
-      fill(frag.querySelector(".slot-det-marca"),     r.marca || "");
-      fill(frag.querySelector(".slot-det-modelo"),    r.modelo || "");
-      fill(frag.querySelector(".slot-det-anio"),      r.anio ?? "");
-      fill(frag.querySelector(".slot-det-color"),     r.color || "");
-      fill(frag.querySelector(".slot-det-vin"),       r.VIN || "-");
-      fill(frag.querySelector(".slot-det-falla"),     r.falla || "");
-      fill(frag.querySelector(".slot-det-mecanico"),  r.mecanico || "-");
+      fill(frag.querySelector(".slot-det-cliente"), r.cliente || "");
+      fill(frag.querySelector(".slot-det-tel1"), r.telefono1 || "");
+      fill(frag.querySelector(".slot-det-tel2"), r.telefono2 || "-");
+      fill(frag.querySelector(".slot-det-marca"), r.marca || "");
+      fill(frag.querySelector(".slot-det-modelo"), r.modelo || "");
+      fill(frag.querySelector(".slot-det-anio"), r.anio ?? "");
+      fill(frag.querySelector(".slot-det-color"), r.color || "");
+      fill(frag.querySelector(".slot-det-vin"), r.VIN || "-");
+      fill(frag.querySelector(".slot-det-falla"), r.falla || "");
+      fill(frag.querySelector(".slot-det-mecanico"), r.mecanico || "-");
 
-      // === NUEVO: fecha de ingreso en el detalle ===
+      // Fecha de ingreso en el detalle
       const fechaTxt = getFechaTexto(r);
       fill(frag.querySelector(".slot-det-fecha"), fechaTxt);
 
       const cobroInput = frag.querySelector(".cobro-input");
-      if (cobroInput) { cobroInput.value = r.cobro || ""; cobroInput.dataset.id = r.id_orden; }
-      
-      const vinInput = frag.querySelector(".vin-input");
-      if (vinInput) { vinInput.value = r.VIN || ""; vinInput.dataset.id = r.id_orden; }
-      
-      const mecInput = frag.querySelector(".mecanico-input");
-      if (mecInput) { mecInput.value = r.mecanico || ""; mecInput.dataset.id = r.id_orden; }
+      if (cobroInput) {
+        cobroInput.value = r.cobro || "";
+        cobroInput.dataset.id = r.id_orden;
+      }
 
-      // 2. Estado en el detalle
+      const vinInput = frag.querySelector(".vin-input");
+      if (vinInput) {
+        vinInput.value = r.VIN || "";
+        vinInput.dataset.id = r.id_orden;
+      }
+
+      const mecInput = frag.querySelector(".mecanico-input");
+      if (mecInput) {
+        mecInput.value = r.mecanico || "";
+        mecInput.dataset.id = r.id_orden;
+      }
+
+      // Estado en el detalle
       const detEstadoSlot = frag.querySelector(".details .slot-estado");
       if (detEstadoSlot) {
-          detEstadoSlot.textContent = '';
-          const texto = mapEstatus(r.id_estatus);
-          detEstadoSlot.appendChild(createBadgeElement(texto, r.id_estatus || texto));
+        detEstadoSlot.textContent = "";
+        const texto = mapEstatus(r.id_estatus);
+        detEstadoSlot.appendChild(
+          createBadgeElement(texto, r.id_estatus || texto)
+        );
       }
-      
+
       const sel = frag.querySelector(".estado-select");
       if (sel) {
-        sel.innerHTML = ESTADOS
-          .map(o => `<option ${o === mapEstatus(r.id_estatus) ? "selected" : ""}>${o}</option>`)
-          .join("");
+        sel.innerHTML = ESTADOS.map(
+          (o) =>
+            `<option ${
+              o === mapEstatus(r.id_estatus) ? "selected" : ""
+            }>${o}</option>`
+        ).join("");
         sel.dataset.id = r.id_orden;
       }
+
       tbody.appendChild(frag);
     });
 
-    // === NUEVO: renderizar también la tabla de PENDIENTES ===
+    // También pintar tabla de pendientes
     renderPendientes(rows);
   }
 
-  // === NUEVO: pintar tabla de PENDIENTES ===
+  // ========= PINTAR TABLA PENDIENTES =========
   function renderPendientes(rows) {
     if (!tbodyPendientes) return;
     tbodyPendientes.innerHTML = "";
     if (!rows?.length) return;
 
-    const EST_PEND = ["Diagnóstico", "En espera de refacciones", "Reparación", "Listo"];
+    const EST_PEND = [
+      "Diagnóstico",
+      "En espera de refacciones",
+      "Reparación",
+      "Listo",
+    ];
 
     let idx = 1;
     rows.forEach((r) => {
       const estTexto = mapEstatus(r.id_estatus);
-      if (!EST_PEND.includes(estTexto)) return; // solo los estatus que queremos
+      if (!EST_PEND.includes(estTexto)) return;
 
       const tr = document.createElement("tr");
-
-      const fechaTxt = getFechaTexto(r);
-
       tr.innerHTML = `
         <td>${idx++}</td>
         <td>${r.cliente || ""}</td>
-        <td>${autoText(r)}</td>
-        <td></td>
-        <td>${fechaTxt}</td>
+        <td><strong>${autoText(r)}</strong></td>
+        <td>${r.falla || ""}</td>
+        <td class="td-estado"></td>
+        <td class="actions-row">
+          <button class="btn secondary btn-sm pend-mas-info" data-id="${r.id_orden}">Más info</button>
+          <button class="btn btn-danger btn-sm ms-2 pend-borrar" data-id="${r.id_orden}">Borrar</button>
+        </td>
       `;
 
-      const tdEstado = tr.children[3];
-      tdEstado.appendChild(createBadgeElement(estTexto, r.id_estatus || estTexto));
+      const tdEstado = tr.querySelector(".td-estado");
+      tdEstado.appendChild(
+        createBadgeElement(estTexto, r.id_estatus || estTexto)
+      );
 
       tbodyPendientes.appendChild(tr);
     });
@@ -283,7 +326,6 @@
     } catch (e) {
       console.error("Error cargando /api/ordenes/hoy:", e);
       setMsg("No se pudo cargar la lista de hoy", false);
-      // si falla, también limpiar pendientes
       renderPendientes([]);
     }
   }
@@ -299,7 +341,7 @@
         return;
       }
       const frag = document.createDocumentFragment();
-      fotos.forEach(f => {
+      fotos.forEach((f) => {
         const card = document.createElement("div");
         card.className = "foto-item";
         card.style.display = "inline-block";
@@ -309,8 +351,8 @@
         const img = document.createElement("img");
         const ruta = String(f.ruta_archivo || "");
         const src = /^https?:\/\//i.test(ruta)
-          ? ruta                         // URL completa (Cloudinary)
-          : "/" + ruta.replace(/^\/+/, ""); // Ruta local (uploads/...)
+          ? ruta
+          : "/" + ruta.replace(/^\/+/, "");
         img.src = src;
         img.alt = f.nombre_original || "foto";
         img.style.width = "120px";
@@ -336,7 +378,8 @@
       grid.appendChild(frag);
     } catch (e) {
       console.error("No se pudieron cargar fotos:", e);
-      grid.innerHTML = "<div class='small text-danger'>Error al cargar fotos.</div>";
+      grid.innerHTML =
+        "<div class='small text-danger'>Error al cargar fotos.</div>";
     }
   }
 
@@ -362,7 +405,7 @@
     $("#clienteNombre")?.focus();
   });
 
-  // ====== INTERACCIÓN EN TABLA ======
+  // ====== INTERACCIÓN EN TABLA PRINCIPAL ======
   tbody?.addEventListener("click", async (e) => {
     const btnToggle  = e.target.closest(".toggle-detalle");
     const btnGuardar = e.target.closest(".guardar-cambios");
@@ -370,13 +413,13 @@
     const btnBorrar  = e.target.closest(".borrar");
     const btnCamOn   = e.target.closest(".cam-abrir");
     const btnShot    = e.target.closest(".cam-foto");
-    const btnCancel  = e.target.closest(".cam-cancel"); // NUEVO
+    const btnCancel  = e.target.closest(".cam-cancel");
 
     if (btnToggle) {
       const id = btnToggle.dataset.id;
       const trPrincipal = btnToggle.closest("tr");
       const trDetalle   = trPrincipal.nextElementSibling;
-     
+
       const panel = trDetalle?.querySelector(".details");
       if (!panel || !trDetalle) return;
 
@@ -461,7 +504,6 @@
       return;
     }
 
-    // NUEVO: cancelar cámara sin guardar
     if (btnCancel) {
       const id = btnCancel.dataset.id;
       const v = $(`video.cam-preview[data-id="${id}"]`);
@@ -520,7 +562,7 @@
           await cargarFotos(id);
         }
         okSpan?.classList.remove("d-none"); errSpan?.classList.add("d-none");
-        await cargarHoy(); // recargar, esto hace que PENDIENTES también se actualice
+        await cargarHoy(); // recarga lista + pendientes
         setTimeout(() => okSpan?.classList.add("d-none"), 1500);
       } catch (err) {
         console.error("Error guardando:", err);
@@ -534,8 +576,12 @@
       const fotoId  = btnDelFoto.dataset.fotoId;
       const grid    = btnDelFoto.closest(".fotos-grid");
       const ordenId = grid?.dataset.id;
-      try { await API.fotos.remove(fotoId); await cargarFotos(ordenId);
-      } catch (err) { console.error("No se pudo borrar:", err); }
+      try {
+        await API.fotos.remove(fotoId);
+        await cargarFotos(ordenId);
+      } catch (err) {
+        console.error("No se pudo borrar:", err);
+      }
       return;
     }
 
@@ -549,10 +595,11 @@
         const next = tr?.nextElementSibling;
         if (next && next.classList.contains("row-details")) next.remove();
         if (tr) tr.remove();
-        $$("#tabla-lista > tr:not(.row-details) .slot-idx").forEach((td, i) => (td.textContent = String(i + 1)));
+        $$("#tabla-lista > tr:not(.row-details) .slot-idx").forEach(
+          (td, i) => (td.textContent = String(i + 1))
+        );
         setMsg("Registro borrado.");
-        // recargar la tabla de pendientes con lo que quede
-        await cargarHoy();
+        await cargarHoy(); // refresca también pendientes
       } catch (err) {
         console.error(err);
         setMsg(err.message || "No se pudo borrar", false);
@@ -560,20 +607,50 @@
       return;
     }
   });
-  
+
   // Cambio de estado → actualizar badge en detalle
   tbody?.addEventListener("change", (e) => {
     const sel = e.target.closest(".estado-select");
     if (!sel) return;
     const id = sel.dataset.id;
     const detEstadoSlot = $(`.details[data-id="${id}"] .slot-estado`);
-    
+
     if (detEstadoSlot) {
-        detEstadoSlot.textContent = '';
-        detEstadoSlot.appendChild(createBadgeElement(sel.value, sel.value));
+      detEstadoSlot.textContent = "";
+      detEstadoSlot.appendChild(
+        createBadgeElement(sel.value, sel.value)
+      );
     }
   });
 
+  // ====== INTERACCIÓN EN TABLA PENDIENTES ======
+  tbodyPendientes?.addEventListener("click", (e) => {
+    const btnInfo = e.target.closest(".pend-mas-info");
+    const btnDel  = e.target.closest(".pend-borrar");
+
+    if (btnInfo) {
+      const id = btnInfo.dataset.id;
+      const btnMain = $(`.toggle-detalle[data-id="${id}"]`);
+      if (btnMain) {
+        if (btnMain.textContent.trim() === "Más info") {
+          btnMain.click();
+        }
+        btnMain.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      return;
+    }
+
+    if (btnDel) {
+      const id = btnDel.dataset.id;
+      const btnMainDel = $(`#tabla-vehiculos .borrar[data-id="${id}"]`);
+      if (btnMainDel) {
+        btnMainDel.click(); // reutiliza toda la lógica de borrado y recarga
+      }
+      return;
+    }
+  });
+
+  // ====== PANTALLA COMPLETA ======
   function entrarPantallaCompleta() {
     if (!cardLista) return;
     cardLista.dataset.full = "1";

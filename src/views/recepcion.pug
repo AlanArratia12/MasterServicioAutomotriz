@@ -98,9 +98,10 @@ block content
             tr
               th #
               th Cliente
-              th Vehículo
+              th Marca / Modelo / Año / Color
+              th Falla
               th Estado
-              th Fecha de ingreso
+              th(style="width:240px") Acciones
           tbody#tbody-pendientes
             //- Filas generadas desde /js/recepcion.js
 
@@ -165,7 +166,7 @@ block content
                 strong Color:
                 |  
                 span.slot-det-color __COLOR__
-              // ====== NUEVO: FECHA DE INGRESO ======
+              // ====== FECHA DE INGRESO ======
               p
                 strong Fecha de ingreso:
                 |  
@@ -253,7 +254,7 @@ block content
               .flex.gap-2.mb-2
                 button.btn.btn-sm.cam-abrir(type="button" data-id="__ID__") Abrir cámara
                 button.btn.btn-sm.cam-foto(type="button" data-id="__ID__" disabled) Tomar foto
-                // *** NUEVO botón para poder cerrar la cámara sin guardar ***
+                // *** botón para poder cerrar la cámara sin guardar ***
                 button.btn.btn-sm.btn-outline-secondary.cam-cancel(
                   type="button"
                   data-id="__ID__"
@@ -280,5 +281,4 @@ block content
 
   // ====== Scripts (versiones nuevas para romper caché) ======
   script(src="/js/main.js?v=8" defer)
-  // 👇 súbele versión al JS para que el navegador recargue cambios
-  script(src="/js/recepcion.js?v=12" defer)
+  script(src="/js/recepcion.js?v=13" defer)
