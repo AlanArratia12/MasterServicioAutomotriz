@@ -59,8 +59,9 @@ block content
     // Mensaje de feedback solo cuando hay formulario
     p#msg-orden
 
-  // ====== LISTA / TABLA (ADMIN Y EMPLEADOS) ======
+  // ====== LISTAS / TABLAS (ADMIN Y EMPLEADOS) ======
   .cards
+    // ========== CARD: LISTA DE VEHÍCULOS HOY ==========
     .card#card-lista-hoy
       // Header flexible: título + botón pantalla completa a la derecha
       .card-header-flex.d-flex.justify-content-between.align-items-center.mb-2
@@ -83,6 +84,24 @@ block content
               th Estado
               th(style="width:240px") Acciones
           tbody#tabla-lista
+            //- Filas generadas desde /js/recepcion.js
+
+    // ========== CARD: PENDIENTES (SOLO DIAG / ESPERA / REPARACIÓN / LISTO) ==========
+    .card#card-pendientes
+      .card-header-flex.d-flex.justify-content-between.align-items-center.mb-2
+        h3.mb-0 Pendientes
+      p.note En esta tabla solo aparecen vehículos en Diagnóstico, En espera de refacciones, Reparación o Listo.
+
+      .table-responsive
+        table.table#tabla-pendientes
+          thead
+            tr
+              th #
+              th Cliente
+              th Vehículo
+              th Estado
+              th Fecha de ingreso
+          tbody#tbody-pendientes
             //- Filas generadas desde /js/recepcion.js
 
   // ================= Template de fila + panel de detalles =================
@@ -146,6 +165,11 @@ block content
                 strong Color:
                 |  
                 span.slot-det-color __COLOR__
+              // ====== NUEVO: FECHA DE INGRESO ======
+              p
+                strong Fecha de ingreso:
+                |  
+                span.slot-det-fecha __FECHA__
 
               p.mb-1.mt-2
                 strong VIN actual:
@@ -256,4 +280,5 @@ block content
 
   // ====== Scripts (versiones nuevas para romper caché) ======
   script(src="/js/main.js?v=8" defer)
-  script(src="/js/recepcion.js?v=11" defer)
+  // 👇 súbele versión al JS para que el navegador recargue cambios
+  script(src="/js/recepcion.js?v=12" defer)

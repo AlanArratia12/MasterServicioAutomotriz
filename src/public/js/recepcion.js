@@ -12,6 +12,9 @@
   const cardLista = $("#card-lista-hoy");
   const btnFull   = $("#btn-fullscreen-hoy");
 
+  // === NUEVO: tbody de la tabla PENDIENTES ===
+  const tbodyPendientes = $("#tbody-pendientes");
+
   const CAM = new Map(); 
 
   const ESTADOS = [
@@ -149,11 +152,30 @@
 
   function fill(el, text) { if (el) el.textContent = text ?? ""; }
 
-  // ========= PINTAR LISTA =========
+  // === NUEVO: helper para obtener texto de fecha de ingreso ===
+  function getFechaTexto(r) {
+    // ajusta el nombre del campo según tu API:
+    // idealmente SELECT DATE_FORMAT(fecha_ingreso, '%Y-%m-%d %H:%i:%s') AS fecha_ingreso
+    const raw = r.fecha_ingreso || r.created_at || r.fecha || r.fechaIngreso;
+    if (!raw) return "-";
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+    }
+    // Si viene ya formateado (por ejemplo '04/12/2025'), lo dejamos casi tal cual
+    return String(raw).slice(0, 16);
+  }
+
+  // ========= PINTAR LISTA PRINCIPAL =========
   function renderLista(rows) {
     if (!tbody) return;
     tbody.innerHTML = "";
-    if (!rows?.length) return;
+    if (!rows?.length) {
+      // También limpiamos pendientes si no hay nada
+      renderPendientes([]);
+      return;
+    }
 
     rows.forEach((r, idx) => {
       const frag = tpl.content.cloneNode(true);
@@ -187,6 +209,10 @@
       fill(frag.querySelector(".slot-det-falla"),     r.falla || "");
       fill(frag.querySelector(".slot-det-mecanico"),  r.mecanico || "-");
 
+      // === NUEVO: fecha de ingreso en el detalle ===
+      const fechaTxt = getFechaTexto(r);
+      fill(frag.querySelector(".slot-det-fecha"), fechaTxt);
+
       const cobroInput = frag.querySelector(".cobro-input");
       if (cobroInput) { cobroInput.value = r.cobro || ""; cobroInput.dataset.id = r.id_orden; }
       
@@ -213,6 +239,41 @@
       }
       tbody.appendChild(frag);
     });
+
+    // === NUEVO: renderizar también la tabla de PENDIENTES ===
+    renderPendientes(rows);
+  }
+
+  // === NUEVO: pintar tabla de PENDIENTES ===
+  function renderPendientes(rows) {
+    if (!tbodyPendientes) return;
+    tbodyPendientes.innerHTML = "";
+    if (!rows?.length) return;
+
+    const EST_PEND = ["Diagnóstico", "En espera de refacciones", "Reparación", "Listo"];
+
+    let idx = 1;
+    rows.forEach((r) => {
+      const estTexto = mapEstatus(r.id_estatus);
+      if (!EST_PEND.includes(estTexto)) return; // solo los estatus que queremos
+
+      const tr = document.createElement("tr");
+
+      const fechaTxt = getFechaTexto(r);
+
+      tr.innerHTML = `
+        <td>${idx++}</td>
+        <td>${r.cliente || ""}</td>
+        <td>${autoText(r)}</td>
+        <td></td>
+        <td>${fechaTxt}</td>
+      `;
+
+      const tdEstado = tr.children[3];
+      tdEstado.appendChild(createBadgeElement(estTexto, r.id_estatus || estTexto));
+
+      tbodyPendientes.appendChild(tr);
+    });
   }
 
   async function cargarHoy() {
@@ -222,6 +283,8 @@
     } catch (e) {
       console.error("Error cargando /api/ordenes/hoy:", e);
       setMsg("No se pudo cargar la lista de hoy", false);
+      // si falla, también limpiar pendientes
+      renderPendientes([]);
     }
   }
 
@@ -457,7 +520,7 @@
           await cargarFotos(id);
         }
         okSpan?.classList.remove("d-none"); errSpan?.classList.add("d-none");
-        await cargarHoy();
+        await cargarHoy(); // recargar, esto hace que PENDIENTES también se actualice
         setTimeout(() => okSpan?.classList.add("d-none"), 1500);
       } catch (err) {
         console.error("Error guardando:", err);
@@ -488,6 +551,8 @@
         if (tr) tr.remove();
         $$("#tabla-lista > tr:not(.row-details) .slot-idx").forEach((td, i) => (td.textContent = String(i + 1)));
         setMsg("Registro borrado.");
+        // recargar la tabla de pendientes con lo que quede
+        await cargarHoy();
       } catch (err) {
         console.error(err);
         setMsg(err.message || "No se pudo borrar", false);
