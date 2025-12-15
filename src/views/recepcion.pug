@@ -63,7 +63,6 @@ block content
   .cards
     // ========== CARD: LISTA DE VEHÍCULOS HOY ==========
     .card#card-lista-hoy
-      // Header flexible: título + botón pantalla completa a la derecha
       .card-header-flex.d-flex.justify-content-between.align-items-center.mb-2
         h3.mb-0 Lista de vehículos hoy
         button#btn-fullscreen-hoy.btn.btn-primary.btn-sm(
@@ -86,10 +85,14 @@ block content
           tbody#tabla-lista
             //- Filas generadas desde /js/recepcion.js
 
-    // ========== CARD: PENDIENTES (SOLO DIAG / ESPERA / REPARACIÓN / LISTO) ==========
+    // ========== CARD: PENDIENTES ==========
     .card#card-pendientes
       .card-header-flex.d-flex.justify-content-between.align-items-center.mb-2
         h3.mb-0 Pendientes
+        button#btn-fullscreen-pendientes.btn.btn-primary.btn-sm(
+          type="button"
+          title="Ver solo la lista en pantalla completa"
+        ) ⛶
       p.note En esta tabla solo aparecen vehículos en Diagnóstico, En espera de refacciones, Reparación o Listo.
 
       .table-responsive
@@ -118,7 +121,6 @@ block content
         span.badge.slot-estado Recibido
       td.actions-row
         button.btn.secondary.btn-sm.toggle-detalle(data-id="__ID__") Más info
-        // *** le agregamos ms-2 para separar el botón Borrar ***
         button.btn.btn-danger.btn-sm.ms-2.borrar(data-id="__ID__") Borrar
 
     //- === Panel de detalle (plegado) ===
@@ -166,12 +168,10 @@ block content
                 strong Color:
                 |  
                 span.slot-det-color __COLOR__
-              // ====== FECHA DE INGRESO ======
               p
                 strong Fecha de ingreso:
                 |  
                 span.slot-det-fecha __FECHA__
-
               p.mb-1.mt-2
                 strong VIN actual:
                 |  
@@ -187,7 +187,6 @@ block content
 
           // --------- FILA 2: SERVICIO / ESTADO + SEGUIMIENTO ---------
           .details-grid.mt-2
-            // ----- TARJETA: SERVICIO / ESTADO -----
             .details-card.details-card--servicio
               h5
                 i.bi.bi-wrench-adjustable.me-1
@@ -211,7 +210,6 @@ block content
                   option Listo
                   option Entregado
 
-            // ----- TARJETA: COBRO / MECÁNICO -----
             .details-card.details-card--seguimiento
               h5
                 i.bi.bi-clipboard-check.me-1
@@ -239,7 +237,6 @@ block content
             i.bi.bi-camera-fill.me-1
             | Evidencia fotográfica
           .details-grid
-            // Subir / tomar fotos
             .details-card.details-card--fotos
               .form-group.mb-2
                 label.form-label.mb-1(for="fotos-__ID__") Seleccionar fotos (galería)
@@ -254,7 +251,6 @@ block content
               .flex.gap-2.mb-2
                 button.btn.btn-sm.cam-abrir(type="button" data-id="__ID__") Abrir cámara
                 button.btn.btn-sm.cam-foto(type="button" data-id="__ID__" disabled) Tomar foto
-                // *** botón para poder cerrar la cámara sin guardar ***
                 button.btn.btn-sm.btn-outline-secondary.cam-cancel(
                   type="button"
                   data-id="__ID__"
@@ -268,10 +264,8 @@ block content
                 data-id="__ID__"
               )
 
-            // Galería
             .details-card.details-card--galeria
               .fotos-grid(data-id="__ID__")
-                //- Placeholder; el JS reemplaza este contenido
                 p.text-muted.small(data-placeholder="no-fotos") Sin fotos aún.
 
           .details-foot.mt-3
@@ -279,6 +273,5 @@ block content
             span.ms-2.text-success.small.save-ok.d-none(data-id="__ID__") Guardado ✓
             span.ms-2.text-danger.small.save-err.d-none(data-id="__ID__") Error al guardar
 
-  // ====== Scripts (versiones nuevas para romper caché) ======
   script(src="/js/main.js?v=8" defer)
-  script(src="/js/recepcion.js?v=13" defer)
+  script(src="/js/recepcion.js?v=15" defer)

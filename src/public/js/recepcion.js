@@ -9,8 +9,11 @@
   const msg       = $("#msg-orden");
   const tpl       = $("#tpl-fila");
 
-  const cardLista = $("#card-lista-hoy");
-  const btnFull   = $("#btn-fullscreen-hoy");
+  // Cards y botones de pantalla completa
+  const cardLista     = $("#card-lista-hoy");
+  const btnFullLista  = $("#btn-fullscreen-hoy");
+  const cardPend      = $("#card-pendientes");
+  const btnFullPend   = $("#btn-fullscreen-pendientes");
 
   // Tabla de pendientes
   const tbodyPendientes = $("#tbody-pendientes");
@@ -24,6 +27,14 @@
     "Reparación",
     "Listo",
     "Entregado",
+  ];
+
+  // Estados que pertenecen a la tabla Pendientes
+  const ESTADOS_PEND = [
+    "Diagnóstico",
+    "En espera de refacciones",
+    "Reparación",
+    "Listo",
   ];
 
   const API = {
@@ -135,7 +146,6 @@
     return s;
   }
 
-  // Helper para crear el badge visualmente (usado en lista y en detalles)
   function createBadgeElement(texto, idOTextoOrigen) {
     const estilo = getEstatusStyles(idOTextoOrigen);
     const badge = document.createElement("span");
@@ -160,22 +170,19 @@
     if (el) el.textContent = text ?? "";
   }
 
-  // Fecha de ingreso: evita el problema de que se recorra un día
+  // Fecha de ingreso: usamos solo la parte de fecha para evitar desfase
   function getFechaTexto(r) {
     const raw =
       r.fecha_ingreso || r.created_at || r.fecha || r.fechaIngreso;
     if (!raw) return "-";
 
     const str = String(raw);
-
-    // Si viene como 2025-12-04T00:00:00.000Z → tomamos solo la parte de fecha
     const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (m) {
       const [, y, mo, d] = m;
       return `${d}/${mo}/${y}`; // 04/12/2025
     }
 
-    // Fallback por si viene en otro formato
     const d = new Date(str);
     if (!isNaN(d.getTime())) {
       const pad = (n) => String(n).padStart(2, "0");
@@ -185,98 +192,83 @@
     return str.slice(0, 16);
   }
 
+  // Separa las órdenes en 2 listas: las que van en "hoy" y las de "pendientes"
+  function splitPorPendientes(rows) {
+    const hoy = [];
+    const pend = [];
+
+    (rows || []).forEach(r => {
+      const est = mapEstatus(r.id_estatus);
+      if (ESTADOS_PEND.includes(est)) {
+        pend.push(r);     // va a la tabla de Pendientes
+      } else {
+        hoy.push(r);      // se queda en Lista de vehículos hoy
+      }
+    });
+
+    return { hoy, pend };
+  }
+
   // ========= PINTAR LISTA PRINCIPAL =========
   function renderLista(rows) {
     if (!tbody) return;
     tbody.innerHTML = "";
-    if (!rows?.length) {
-      renderPendientes([]);
-      return;
-    }
+    if (!rows?.length) return;
 
-    rows.forEach((r, idx) => {
+    rows.forEach((r, i) => {
+      const estTexto = mapEstatus(r.id_estatus);
       const frag = tpl.content.cloneNode(true);
 
-      fill(frag.querySelector(".slot-idx"), String(idx + 1));
+      fill(frag.querySelector(".slot-idx"), String(i + 1));
       fill(frag.querySelector(".slot-cliente"), r.cliente || "");
       fill(frag.querySelector(".slot-auto"), autoText(r));
       fill(frag.querySelector(".slot-falla"), r.falla || "");
 
-      // Estado en la fila principal
       const estadoSlot = frag.querySelector(".slot-estado");
       if (estadoSlot) {
         estadoSlot.textContent = "";
-        const texto = mapEstatus(r.id_estatus);
         estadoSlot.appendChild(
-          createBadgeElement(texto, r.id_estatus || texto)
+          createBadgeElement(estTexto, r.id_estatus || estTexto)
         );
       }
 
       frag
         .querySelectorAll("[data-id='__ID__']")
-        .forEach((n) => n.setAttribute("data-id", r.id_orden));
+        .forEach(n => n.setAttribute("data-id", r.id_orden));
+
       const det = frag.querySelector(".details");
       det?.setAttribute("data-id", r.id_orden);
 
-      fill(frag.querySelector(".slot-det-cliente"), r.cliente || "");
-      fill(frag.querySelector(".slot-det-tel1"), r.telefono1 || "");
-      fill(frag.querySelector(".slot-det-tel2"), r.telefono2 || "-");
-      fill(frag.querySelector(".slot-det-marca"), r.marca || "");
-      fill(frag.querySelector(".slot-det-modelo"), r.modelo || "");
-      fill(frag.querySelector(".slot-det-anio"), r.anio ?? "");
-      fill(frag.querySelector(".slot-det-color"), r.color || "");
-      fill(frag.querySelector(".slot-det-vin"), r.VIN || "-");
-      fill(frag.querySelector(".slot-det-falla"), r.falla || "");
+      fill(frag.querySelector(".slot-det-cliente"),  r.cliente || "");
+      fill(frag.querySelector(".slot-det-tel1"),     r.telefono1 || "");
+      fill(frag.querySelector(".slot-det-tel2"),     r.telefono2 || "-");
+      fill(frag.querySelector(".slot-det-marca"),    r.marca || "");
+      fill(frag.querySelector(".slot-det-modelo"),   r.modelo || "");
+      fill(frag.querySelector(".slot-det-anio"),     r.anio ?? "");
+      fill(frag.querySelector(".slot-det-color"),    r.color || "");
+      fill(frag.querySelector(".slot-det-vin"),      r.VIN || "-");
+      fill(frag.querySelector(".slot-det-falla"),    r.falla || "");
       fill(frag.querySelector(".slot-det-mecanico"), r.mecanico || "-");
+      fill(frag.querySelector(".slot-det-fecha"),    getFechaTexto(r));
 
-      // Fecha de ingreso en el detalle
-      const fechaTxt = getFechaTexto(r);
-      fill(frag.querySelector(".slot-det-fecha"), fechaTxt);
-
-      const cobroInput = frag.querySelector(".cobro-input");
-      if (cobroInput) {
-        cobroInput.value = r.cobro || "";
-        cobroInput.dataset.id = r.id_orden;
-      }
-
-      const vinInput = frag.querySelector(".vin-input");
-      if (vinInput) {
-        vinInput.value = r.VIN || "";
-        vinInput.dataset.id = r.id_orden;
-      }
-
-      const mecInput = frag.querySelector(".mecanico-input");
-      if (mecInput) {
-        mecInput.value = r.mecanico || "";
-        mecInput.dataset.id = r.id_orden;
-      }
-
-      // Estado en el detalle
       const detEstadoSlot = frag.querySelector(".details .slot-estado");
       if (detEstadoSlot) {
         detEstadoSlot.textContent = "";
-        const texto = mapEstatus(r.id_estatus);
         detEstadoSlot.appendChild(
-          createBadgeElement(texto, r.id_estatus || texto)
+          createBadgeElement(estTexto, r.id_estatus || estTexto)
         );
       }
 
       const sel = frag.querySelector(".estado-select");
       if (sel) {
         sel.innerHTML = ESTADOS.map(
-          (o) =>
-            `<option ${
-              o === mapEstatus(r.id_estatus) ? "selected" : ""
-            }>${o}</option>`
+          o => `<option ${o === estTexto ? "selected" : ""}>${o}</option>`
         ).join("");
         sel.dataset.id = r.id_orden;
       }
 
       tbody.appendChild(frag);
     });
-
-    // También pintar tabla de pendientes
-    renderPendientes(rows);
   }
 
   // ========= PINTAR TABLA PENDIENTES =========
@@ -285,17 +277,9 @@
     tbodyPendientes.innerHTML = "";
     if (!rows?.length) return;
 
-    const EST_PEND = [
-      "Diagnóstico",
-      "En espera de refacciones",
-      "Reparación",
-      "Listo",
-    ];
-
     let idx = 1;
-    rows.forEach((r) => {
+    rows.forEach(r => {
       const estTexto = mapEstatus(r.id_estatus);
-      if (!EST_PEND.includes(estTexto)) return;
 
       const tr = document.createElement("tr");
       tr.innerHTML = `
@@ -322,10 +306,14 @@
   async function cargarHoy() {
     try {
       const rows = await API.hoy();
-      renderLista(rows);
+      const { hoy, pend } = splitPorPendientes(rows);
+
+      renderLista(hoy);       // Solo los que NO son pendientes
+      renderPendientes(pend); // Diagnóstico / En espera / Reparación / Listo
     } catch (e) {
       console.error("Error cargando /api/ordenes/hoy:", e);
       setMsg("No se pudo cargar la lista de hoy", false);
+      renderLista([]);
       renderPendientes([]);
     }
   }
@@ -650,49 +638,56 @@
     }
   });
 
-  // ====== PANTALLA COMPLETA ======
-  function entrarPantallaCompleta() {
-    if (!cardLista) return;
-    cardLista.dataset.full = "1";
-    cardLista.style.position = "fixed";
-    cardLista.style.top      = "0";
-    cardLista.style.left     = "0";
-    cardLista.style.width    = "100vw";
-    cardLista.style.height   = "100vh";
-    cardLista.style.zIndex   = "99999";
-    cardLista.style.background = "#fff";
-    cardLista.style.overflowY = "auto";
-    cardLista.style.paddingBottom = "250px";
+  // ====== PANTALLA COMPLETA (HOY y PENDIENTES) ======
+  function entrarPantallaCompleta(card, btn) {
+    if (!card) return;
+    card.dataset.full = "1";
+    card.style.position = "fixed";
+    card.style.top      = "0";
+    card.style.left     = "0";
+    card.style.width    = "100vw";
+    card.style.height   = "100vh";
+    card.style.zIndex   = "99999";
+    card.style.background = "#fff";
+    card.style.overflowY = "auto";
+    card.style.paddingBottom = "250px";
     document.body.style.overflow = "hidden";
-    if (btnFull) btnFull.textContent = "⤢ SALIR";
+    if (btn) btn.textContent = "⤢ SALIR";
   }
 
-  function salirPantallaCompleta() {
-    if (!cardLista) return;
-    delete cardLista.dataset.full;
-    cardLista.style.position = "";
-    cardLista.style.top      = "";
-    cardLista.style.left     = "";
-    cardLista.style.width    = "";
-    cardLista.style.height   = "";
-    cardLista.style.zIndex   = "";
-    cardLista.style.background = "";
-    cardLista.style.overflowY = "";
-    cardLista.style.paddingBottom = "";
+  function salirPantallaCompleta(card, btn) {
+    if (!card) return;
+    delete card.dataset.full;
+    card.style.position = "";
+    card.style.top      = "";
+    card.style.left     = "";
+    card.style.width    = "";
+    card.style.height   = "";
+    card.style.zIndex   = "";
+    card.style.background = "";
+    card.style.overflowY = "";
+    card.style.paddingBottom = "";
     document.body.style.overflow = "";
-    if (btnFull) btnFull.textContent = "⛶";
+    if (btn) btn.textContent = "⛶";
   }
 
-  function togglePantallaCompleta() {
-    if (!cardLista) return;
-    if (cardLista.dataset.full === "1") {
-      salirPantallaCompleta();
+  function togglePantallaCompleta(card, btn) {
+    if (!card) return;
+    if (card.dataset.full === "1") {
+      salirPantallaCompleta(card, btn);
     } else {
-      entrarPantallaCompleta();
+      entrarPantallaCompleta(card, btn);
     }
   }
 
-  btnFull?.addEventListener("click", togglePantallaCompleta);
+  btnFullLista?.addEventListener("click", () => {
+    togglePantallaCompleta(cardLista, btnFullLista);
+  });
 
+  btnFullPend?.addEventListener("click", () => {
+    togglePantallaCompleta(cardPend, btnFullPend);
+  });
+
+  // ====== INICIO ======
   cargarHoy();
 })();
