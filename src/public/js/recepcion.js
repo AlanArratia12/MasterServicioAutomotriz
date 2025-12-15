@@ -250,6 +250,9 @@
     const estTexto = mapEstatus(r.id_estatus);
     const frag = tpl.content.cloneNode(true);
 
+    // VIN puede venir como VIN o vin según el backend
+    const vinValor = (r.VIN ?? r.vin ?? "").toString();
+
     fill(frag.querySelector(".slot-idx"),       String(idx));
     fill(frag.querySelector(".slot-cliente"),  r.cliente || "");
     fill(frag.querySelector(".slot-auto"),     autoText(r));
@@ -277,7 +280,7 @@
     fill(frag.querySelector(".slot-det-modelo"),   r.modelo || "");
     fill(frag.querySelector(".slot-det-anio"),     r.anio ?? "");
     fill(frag.querySelector(".slot-det-color"),    r.color || "");
-    fill(frag.querySelector(".slot-det-vin"),      r.VIN || "-");
+    fill(frag.querySelector(".slot-det-vin"),      vinValor || "-");
     fill(frag.querySelector(".slot-det-falla"),    r.falla || "");
     fill(frag.querySelector(".slot-det-mecanico"), r.mecanico || "-");
     fill(frag.querySelector(".slot-det-fecha"),    getFechaTexto(r));
@@ -296,6 +299,25 @@
         o => `<option ${o === estTexto ? "selected" : ""}>${o}</option>`
       ).join("");
       sel.dataset.id = r.id_orden;
+    }
+
+    // ====== IMPORTANTE: rellenar inputs con lo que venga de la BD ======
+    const cobroInput = frag.querySelector(".cobro-input");
+    if (cobroInput) {
+      cobroInput.value = r.cobro || "";
+      cobroInput.dataset.id = r.id_orden;
+    }
+
+    const vinInput = frag.querySelector(".vin-input");
+    if (vinInput) {
+      vinInput.value = vinValor;
+      vinInput.dataset.id = r.id_orden;
+    }
+
+    const mecInput = frag.querySelector(".mecanico-input");
+    if (mecInput) {
+      mecInput.value = r.mecanico || "";
+      mecInput.dataset.id = r.id_orden;
     }
 
     return frag;
@@ -575,7 +597,7 @@
           await cargarFotos(id);
         }
         okSpan?.classList.remove("d-none"); errSpan?.classList.add("d-none");
-        await cargarHoy(); // recarga lista + pendientes
+        await cargarHoy(); // recarga lista + pendientes con datos actualizados
         setTimeout(() => okSpan?.classList.add("d-none"), 1500);
       } catch (err) {
         console.error("Error guardando:", err);
