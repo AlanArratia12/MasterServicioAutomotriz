@@ -245,6 +245,62 @@
     return { hoy, pend };
   }
 
+  // ========= RENDER GENÉRICO DE UNA FILA (usando tpl-fila) =========
+  function buildFilaDesdeTemplate(r, idx) {
+    const estTexto = mapEstatus(r.id_estatus);
+    const frag = tpl.content.cloneNode(true);
+
+    fill(frag.querySelector(".slot-idx"),       String(idx));
+    fill(frag.querySelector(".slot-cliente"),  r.cliente || "");
+    fill(frag.querySelector(".slot-auto"),     autoText(r));
+    fill(frag.querySelector(".slot-falla"),    r.falla || "");
+
+    const estadoSlot = frag.querySelector(".slot-estado");
+    if (estadoSlot) {
+      estadoSlot.textContent = "";
+      estadoSlot.appendChild(
+        createBadgeElement(estTexto, r.id_estatus || estTexto)
+      );
+    }
+
+    frag
+      .querySelectorAll("[data-id='__ID__']")
+      .forEach(n => n.setAttribute("data-id", r.id_orden));
+
+    const det = frag.querySelector(".details");
+    det?.setAttribute("data-id", r.id_orden);
+
+    fill(frag.querySelector(".slot-det-cliente"),  r.cliente || "");
+    fill(frag.querySelector(".slot-det-tel1"),     r.telefono1 || "");
+    fill(frag.querySelector(".slot-det-tel2"),     r.telefono2 || "-");
+    fill(frag.querySelector(".slot-det-marca"),    r.marca || "");
+    fill(frag.querySelector(".slot-det-modelo"),   r.modelo || "");
+    fill(frag.querySelector(".slot-det-anio"),     r.anio ?? "");
+    fill(frag.querySelector(".slot-det-color"),    r.color || "");
+    fill(frag.querySelector(".slot-det-vin"),      r.VIN || "-");
+    fill(frag.querySelector(".slot-det-falla"),    r.falla || "");
+    fill(frag.querySelector(".slot-det-mecanico"), r.mecanico || "-");
+    fill(frag.querySelector(".slot-det-fecha"),    getFechaTexto(r));
+
+    const detEstadoSlot = frag.querySelector(".details .slot-estado");
+    if (detEstadoSlot) {
+      detEstadoSlot.textContent = "";
+      detEstadoSlot.appendChild(
+        createBadgeElement(estTexto, r.id_estatus || estTexto)
+      );
+    }
+
+    const sel = frag.querySelector(".estado-select");
+    if (sel) {
+      sel.innerHTML = ESTADOS.map(
+        o => `<option ${o === estTexto ? "selected" : ""}>${o}</option>`
+      ).join("");
+      sel.dataset.id = r.id_orden;
+    }
+
+    return frag;
+  }
+
   // ========= PINTAR LISTA PRINCIPAL =========
   function renderLista(rows) {
     if (!tbody) return;
@@ -252,90 +308,20 @@
     if (!rows?.length) return;
 
     rows.forEach((r, i) => {
-      const estTexto = mapEstatus(r.id_estatus);
-      const frag = tpl.content.cloneNode(true);
-
-      fill(frag.querySelector(".slot-idx"), String(i + 1));
-      fill(frag.querySelector(".slot-cliente"), r.cliente || "");
-      fill(frag.querySelector(".slot-auto"), autoText(r));
-      fill(frag.querySelector(".slot-falla"), r.falla || "");
-
-      const estadoSlot = frag.querySelector(".slot-estado");
-      if (estadoSlot) {
-        estadoSlot.textContent = "";
-        estadoSlot.appendChild(
-          createBadgeElement(estTexto, r.id_estatus || estTexto)
-        );
-      }
-
-      frag
-        .querySelectorAll("[data-id='__ID__']")
-        .forEach(n => n.setAttribute("data-id", r.id_orden));
-
-      const det = frag.querySelector(".details");
-      det?.setAttribute("data-id", r.id_orden);
-
-      fill(frag.querySelector(".slot-det-cliente"),  r.cliente || "");
-      fill(frag.querySelector(".slot-det-tel1"),     r.telefono1 || "");
-      fill(frag.querySelector(".slot-det-tel2"),     r.telefono2 || "-");
-      fill(frag.querySelector(".slot-det-marca"),    r.marca || "");
-      fill(frag.querySelector(".slot-det-modelo"),   r.modelo || "");
-      fill(frag.querySelector(".slot-det-anio"),     r.anio ?? "");
-      fill(frag.querySelector(".slot-det-color"),    r.color || "");
-      fill(frag.querySelector(".slot-det-vin"),      r.VIN || "-");
-      fill(frag.querySelector(".slot-det-falla"),    r.falla || "");
-      fill(frag.querySelector(".slot-det-mecanico"), r.mecanico || "-");
-      fill(frag.querySelector(".slot-det-fecha"),    getFechaTexto(r));
-
-      const detEstadoSlot = frag.querySelector(".details .slot-estado");
-      if (detEstadoSlot) {
-        detEstadoSlot.textContent = "";
-        detEstadoSlot.appendChild(
-          createBadgeElement(estTexto, r.id_estatus || estTexto)
-        );
-      }
-
-      const sel = frag.querySelector(".estado-select");
-      if (sel) {
-        sel.innerHTML = ESTADOS.map(
-          o => `<option ${o === estTexto ? "selected" : ""}>${o}</option>`
-        ).join("");
-        sel.dataset.id = r.id_orden;
-      }
-
+      const frag = buildFilaDesdeTemplate(r, i + 1);
       tbody.appendChild(frag);
     });
   }
 
-  // ========= PINTAR TABLA PENDIENTES =========
+  // ========= PINTAR TABLA PENDIENTES (usa el mismo template) =========
   function renderPendientes(rows) {
     if (!tbodyPendientes) return;
     tbodyPendientes.innerHTML = "";
     if (!rows?.length) return;
 
-    let idx = 1;
-    rows.forEach(r => {
-      const estTexto = mapEstatus(r.id_estatus);
-
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${idx++}</td>
-        <td>${r.cliente || ""}</td>
-        <td><strong>${autoText(r)}</strong></td>
-        <td>${r.falla || ""}</td>
-        <td class="td-estado"></td>
-        <td class="actions-row">
-          <button class="btn secondary btn-sm pend-mas-info" data-id="${r.id_orden}">Más info</button>
-          <button class="btn btn-danger btn-sm ms-2 pend-borrar" data-id="${r.id_orden}">Borrar</button>
-        </td>
-      `;
-
-      const tdEstado = tr.querySelector(".td-estado");
-      tdEstado.appendChild(
-        createBadgeElement(estTexto, r.id_estatus || estTexto)
-      );
-
-      tbodyPendientes.appendChild(tr);
+    rows.forEach((r, i) => {
+      const frag = buildFilaDesdeTemplate(r, i + 1);
+      tbodyPendientes.appendChild(frag);
     });
   }
 
@@ -432,8 +418,8 @@
     $("#clienteNombre")?.focus();
   });
 
-  // ====== INTERACCIÓN EN TABLA PRINCIPAL ======
-  tbody?.addEventListener("click", async (e) => {
+  // ====== HANDLER COMPARTIDO PARA AMBAS TABLAS ======
+  async function handleTableClick(e) {
     const btnToggle  = e.target.closest(".toggle-detalle");
     const btnGuardar = e.target.closest(".guardar-cambios");
     const btnDelFoto = e.target.closest(".del-foto");
@@ -622,6 +608,7 @@
         const next = tr?.nextElementSibling;
         if (next && next.classList.contains("row-details")) next.remove();
         if (tr) tr.remove();
+        // Reindex de la tabla principal (pero luego cargarHoy vuelve a dibujar todo)
         $$("#tabla-lista > tr:not(.row-details) .slot-idx").forEach(
           (td, i) => (td.textContent = String(i + 1))
         );
@@ -633,10 +620,10 @@
       }
       return;
     }
-  });
+  }
 
-  // Cambio de estado → actualizar badge en detalle
-  tbody?.addEventListener("change", (e) => {
+  // Cambio de estado → actualizar badge en detalle (para ambas tablas)
+  function handleTableChange(e) {
     const sel = e.target.closest(".estado-select");
     if (!sel) return;
     const id = sel.dataset.id;
@@ -648,34 +635,14 @@
         createBadgeElement(sel.value, sel.value)
       );
     }
-  });
+  }
 
-  // ====== INTERACCIÓN EN TABLA PENDIENTES ======
-  tbodyPendientes?.addEventListener("click", (e) => {
-    const btnInfo = e.target.closest(".pend-mas-info");
-    const btnDel  = e.target.closest(".pend-borrar");
+  // Asignar handlers a las 2 tablas
+  tbody?.addEventListener("click", handleTableClick);
+  tbodyPendientes?.addEventListener("click", handleTableClick);
 
-    if (btnInfo) {
-      const id = btnInfo.dataset.id;
-      const btnMain = $(`.toggle-detalle[data-id="${id}"]`);
-      if (btnMain) {
-        if (btnMain.textContent.trim() === "Más info") {
-          btnMain.click();
-        }
-        btnMain.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-      return;
-    }
-
-    if (btnDel) {
-      const id = btnDel.dataset.id;
-      const btnMainDel = $(`#tabla-vehiculos .borrar[data-id="${id}"]`);
-      if (btnMainDel) {
-        btnMainDel.click(); // reutiliza toda la lógica de borrado y recarga
-      }
-      return;
-    }
-  });
+  tbody?.addEventListener("change", handleTableChange);
+  tbodyPendientes?.addEventListener("change", handleTableChange);
 
   // ====== PANTALLA COMPLETA (HOY y PENDIENTES) ======
   function entrarPantallaCompleta(card, btn) {
