@@ -15,7 +15,7 @@
   const cardPend      = $("#card-pendientes");
   const btnFullPend   = $("#btn-fullscreen-pendientes");
 
-  // Tabla de pendientes (tbody)
+  // Tabla de pendientes
   const tbodyPendientes = $("#tbody-pendientes");
 
   const CAM = new Map();
@@ -29,8 +29,7 @@
     "Entregado",
   ];
 
-  // Pendientes (solo si NO es de hoy)
-  // Incluye Recibido porque a veces se quedan para el día siguiente sin revisar
+  // Pendientes (solo si NO es de hoy). Incluye Recibido porque a veces se quedan para el día siguiente.
   const ESTADOS_PEND = [
     "Recibido",
     "Diagnóstico",
@@ -169,14 +168,12 @@
     if (el) el.textContent = text ?? "";
   }
 
-  // ====== FECHA: evitar desfases de timezone ======
+  // ===== FECHAS (sin desfases por timezone) =====
   function extraerYMD(raw) {
     if (!raw) return null;
     const str = String(raw);
-
     const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (m) return { y: +m[1], m: +m[2], d: +m[3] };
-
     const dt = new Date(str);
     if (isNaN(dt.getTime())) return null;
     return { y: dt.getFullYear(), m: dt.getMonth() + 1, d: dt.getDate() };
@@ -186,7 +183,6 @@
     const raw = r.fecha_ingreso || r.created_at || r.fecha || r.fechaIngreso;
     const f = extraerYMD(raw);
     if (!f) return false;
-
     const hoy = new Date();
     return f.y === hoy.getFullYear() && f.m === (hoy.getMonth() + 1) && f.d === hoy.getDate();
   }
@@ -199,39 +195,31 @@
     return `${pad(f.d)}/${pad(f.m)}/${f.y}`;
   }
 
-  // ====== Split Hoy vs Pendientes (sin duplicados) ======
+  // HOY: todo lo ingresado hoy (cualquier estado)
+  // PEND: NO hoy + estado en Recibido/Diagnóstico/Espera/Reparación/Listo
   function splitHoyPend(rows) {
     const hoy = [];
     const pend = [];
-
     (rows || []).forEach(r => {
       const est = mapEstatus(r.id_estatus);
-      if (esDeHoy(r)) {
-        // HOY: todo lo de hoy (cualquier estado)
-        hoy.push(r);
-      } else {
-        // PENDIENTES: NO hoy + estado en lista pendiente (no entregado)
-        if (ESTADOS_PEND.includes(est)) {
-          pend.push(r);
-        }
-      }
+      if (esDeHoy(r)) hoy.push(r);
+      else if (ESTADOS_PEND.includes(est)) pend.push(r);
     });
-
     return { hoy, pend };
   }
 
-  // ====== Construye fila usando template (misma tabla y mismo detalle) ======
-  function buildFilaDesdeTemplate(r, idx) {
+  // Construye filas usando el mismo template (para HOY y PENDIENTES)
+  function buildFila(r, idx) {
     const estTexto = mapEstatus(r.id_estatus);
     const frag = tpl.content.cloneNode(true);
 
     // VIN puede venir como VIN o vin
     const vinValor = (r.VIN ?? r.vin ?? "").toString();
 
-    fill(frag.querySelector(".slot-idx"),       String(idx));
-    fill(frag.querySelector(".slot-cliente"),  r.cliente || "");
-    fill(frag.querySelector(".slot-auto"),     autoText(r));
-    fill(frag.querySelector(".slot-falla"),    r.falla || "");
+    fill(frag.querySelector(".slot-idx"), String(idx));
+    fill(frag.querySelector(".slot-cliente"), r.cliente || "");
+    fill(frag.querySelector(".slot-auto"), autoText(r));
+    fill(frag.querySelector(".slot-falla"), r.falla || "");
 
     const estadoSlot = frag.querySelector(".slot-estado");
     if (estadoSlot) {
@@ -267,7 +255,7 @@
       sel.dataset.id = r.id_orden;
     }
 
-    // ✅ IMPORTANTE: rellenar INPUTS (antes se quedaban en blanco en Recepción)
+    // ✅ RELLENAR INPUTS (lo que faltaba)
     const vinInput = frag.querySelector(".vin-input");
     if (vinInput) {
       vinInput.value = vinValor || "";
@@ -293,14 +281,14 @@
     if (!tbody) return;
     tbody.innerHTML = "";
     if (!rows?.length) return;
-    rows.forEach((r, i) => tbody.appendChild(buildFilaDesdeTemplate(r, i + 1)));
+    rows.forEach((r, i) => tbody.appendChild(buildFila(r, i + 1)));
   }
 
   function renderPendientes(rows) {
     if (!tbodyPendientes) return;
     tbodyPendientes.innerHTML = "";
     if (!rows?.length) return;
-    rows.forEach((r, i) => tbodyPendientes.appendChild(buildFilaDesdeTemplate(r, i + 1)));
+    rows.forEach((r, i) => tbodyPendientes.appendChild(buildFila(r, i + 1)));
   }
 
   async function cargarHoy() {
@@ -389,7 +377,7 @@
     $("#clienteNombre")?.focus();
   });
 
-  // ====== HANDLER COMPARTIDO PARA AMBAS TABLAS (HOY y PENDIENTES) ======
+  // ====== CLICK COMPARTIDO PARA AMBAS TABLAS (HOY y PENDIENTES) ======
   async function handleTableClick(e) {
     const btnToggle  = e.target.closest(".toggle-detalle");
     const btnGuardar = e.target.closest(".guardar-cambios");
@@ -522,42 +510,41 @@
       return;
     }
 
+    // ✅ FIX REAL: al guardar, actualizamos DOM local y solo recargamos si el ESTADO cambia (para mover entre HOY/PEND).
     if (btnGuardar) {
       const id    = btnGuardar.dataset.id;
       const panel = $(`.details[data-id="${id}"]`);
+
       const sel        = panel?.querySelector(".estado-select");
       const vinEl      = panel?.querySelector(".vin-input");
       const cobroEl    = panel?.querySelector(".cobro-input");
       const mecanicoEl = panel?.querySelector(".mecanico-input");
-
       const fotosInput = panel?.querySelector(`.fotos-input[data-id="${id}"]`);
+
       const okSpan  = panel?.querySelector(`.save-ok`);
       const errSpan = panel?.querySelector(`.save-err`);
+
+      // para saber si cambia de estado y requiere recarga total
+      const estadoActualBadge = panel?.querySelector(".slot-estado")?.textContent?.trim() || "";
+      const nuevoEstado = sel?.value?.trim() || "";
 
       try {
         const payload = {};
 
-        // Estado siempre lo mandamos si existe
-        if (sel?.value) payload.estado = sel.value;
+        if (nuevoEstado) payload.estado = nuevoEstado;
 
-        // ✅ CLAVE: NO mandar vacíos por accidente (evita borrar BD)
-        if (vinEl) {
-          const v = (vinEl.value || "").trim();
-          if (v !== "") payload.vin = v;
-        }
+        const vinVal = (vinEl?.value || "").trim();
+        const cobroVal = (cobroEl?.value || "").trim();
+        const mecVal = (mecanicoEl?.value || "").trim();
 
-        if (cobroEl) {
-          const c = (cobroEl.value || "").trim();
-          if (c !== "") payload.cobro = c;
-        }
-
-        if (mecanicoEl) {
-          const m = (mecanicoEl.value || "").trim();
-          if (m !== "") payload.mecanico = m;
-        }
+        // ✅ NO mandar vacíos (evita borrar valores en BD)
+        if (vinVal !== "") payload.vin = vinVal;
+        if (cobroVal !== "") payload.cobro = cobroVal;
+        if (mecVal !== "") payload.mecanico = mecVal;
 
         await API.patch(id, payload);
 
+        // Subir fotos si hay
         const S = CAM.get(id) || { captures:[] };
         const bag = [];
         if (fotosInput?.files?.length) bag.push(...fotosInput.files);
@@ -570,12 +557,41 @@
           await cargarFotos(id);
         }
 
-        okSpan?.classList.remove("d-none"); errSpan?.classList.add("d-none");
-        await cargarHoy();
+        // ✅ ACTUALIZAR DOM LOCAL (esto evita que se vea "en blanco" por /api/ordenes/hoy incompleto)
+        const vinSpan = panel.querySelector(".slot-det-vin");
+        if (vinSpan) vinSpan.textContent = vinVal || (vinSpan.textContent || "-");
+
+        const mecSpan = panel.querySelector(".slot-det-mecanico");
+        if (mecSpan) mecSpan.textContent = mecVal || (mecSpan.textContent || "-");
+
+        const estadoBadge = panel.querySelector(".slot-estado");
+        if (estadoBadge && nuevoEstado) {
+          estadoBadge.textContent = "";
+          estadoBadge.appendChild(createBadgeElement(nuevoEstado, nuevoEstado));
+        }
+
+        // También actualizar badge de la fila principal
+        const btnRow = document.querySelector(`.toggle-detalle[data-id="${id}"]`);
+        const trPrincipal = btnRow?.closest("tr");
+        const filaEstadoSlot = trPrincipal?.querySelector(".slot-estado");
+        if (filaEstadoSlot && nuevoEstado) {
+          filaEstadoSlot.textContent = "";
+          filaEstadoSlot.appendChild(createBadgeElement(nuevoEstado, nuevoEstado));
+        }
+
+        okSpan?.classList.remove("d-none");
+        errSpan?.classList.add("d-none");
         setTimeout(() => okSpan?.classList.add("d-none"), 1500);
+
+        // ✅ Solo recargar si cambió el estado (por si se mueve de HOY a PEND o sale por ENTREGADO)
+        if (nuevoEstado && estadoActualBadge && nuevoEstado.toLowerCase() !== estadoActualBadge.toLowerCase()) {
+          await cargarHoy();
+        }
+
       } catch (err) {
         console.error("Error guardando:", err);
-        okSpan?.classList.add("d-none"); errSpan?.classList.remove("d-none");
+        okSpan?.classList.add("d-none");
+        errSpan?.classList.remove("d-none");
         setTimeout(() => errSpan?.classList.add("d-none"), 2000);
       }
       return;
@@ -621,7 +637,7 @@
     }
   }
 
-  // ✅ listeners para ambas tablas (HOY y PENDIENTES)
+  // listeners para ambas tablas
   tbody?.addEventListener("click", handleTableClick);
   tbodyPendientes?.addEventListener("click", handleTableClick);
 
