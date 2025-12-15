@@ -15,10 +15,10 @@
   const cardPend      = $("#card-pendientes");
   const btnFullPend   = $("#btn-fullscreen-pendientes");
 
-  // Tabla de pendientes
+  // Tabla de pendientes (tbody)
   const tbodyPendientes = $("#tbody-pendientes");
 
-  const CAM = new Map(); 
+  const CAM = new Map();
 
   const ESTADOS = [
     "Recibido",
@@ -29,8 +29,8 @@
     "Entregado",
   ];
 
-  // Estados que pertenecen a la tabla Pendientes
-  // (para días anteriores; hoy siempre va a "Lista de vehículos hoy")
+  // Pendientes (solo si NO es de hoy)
+  // Incluye Recibido porque a veces se quedan para el día siguiente sin revisar
   const ESTADOS_PEND = [
     "Recibido",
     "Diagnóstico",
@@ -128,23 +128,21 @@
     return id || "Recibido";
   }
 
-  // LOGICA DE ESTILOS (Colores Hexadecimales Directos)
   function getEstatusStyles(id) {
-    let s = { bg: "#dbeafe", fg: "#1e3a8a", br: "#bfdbfe" }; // Azul (Recibido)
+    let s = { bg: "#dbeafe", fg: "#1e3a8a", br: "#bfdbfe" }; // Recibido
 
     const num = Number(id);
     const text = String(id).toLowerCase();
 
     if ((!isNaN(num) && num === 1) || text.includes("recibido")) {
-      s = { bg: "#dbeafe", fg: "#1e3a8a", br: "#bfdbfe" }; // Azul
+      s = { bg: "#dbeafe", fg: "#1e3a8a", br: "#bfdbfe" };
     } else if ((!isNaN(num) && [2, 3, 4].includes(num)) || text.match(/diagn|espera|repara/)) {
-      s = { bg: "#fef3c7", fg: "#78350f", br: "#fde68a" }; // Ámbar/Naranja
+      s = { bg: "#fef3c7", fg: "#78350f", br: "#fde68a" };
     } else if ((!isNaN(num) && num === 5) || text.includes("listo")) {
-      s = { bg: "#dcfce7", fg: "#14532d", br: "#bbf7d0" }; // Verde
+      s = { bg: "#dcfce7", fg: "#14532d", br: "#bbf7d0" };
     } else if ((!isNaN(num) && num === 6) || text.includes("entregado")) {
-      s = { bg: "#f3f4f6", fg: "#111827", br: "#d1d5db" }; // Gris
+      s = { bg: "#f3f4f6", fg: "#111827", br: "#d1d5db" };
     }
-
     return s;
   }
 
@@ -160,7 +158,6 @@
     badge.style.fontWeight = "800";
     badge.style.textTransform = "uppercase";
     badge.style.whiteSpace = "nowrap";
-
     badge.style.backgroundColor = estilo.bg;
     badge.style.color = estilo.fg;
     badge.style.border = "1px solid " + estilo.br;
@@ -172,29 +169,17 @@
     if (el) el.textContent = text ?? "";
   }
 
-  // ====== FECHA: helpers para evitar broncas de huso horario ======
+  // ====== FECHA: evitar desfases de timezone ======
   function extraerYMD(raw) {
     if (!raw) return null;
     const str = String(raw);
 
-    // Caso típico: 'YYYY-MM-DD...' → usamos solo esa parte
     const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) {
-      const y  = parseInt(m[1], 10);
-      const mo = parseInt(m[2], 10);
-      const d  = parseInt(m[3], 10);
-      return { y, m: mo, d };
-    }
+    if (m) return { y: +m[1], m: +m[2], d: +m[3] };
 
-    // Fallback: intentar con Date normal
     const dt = new Date(str);
     if (isNaN(dt.getTime())) return null;
-
-    return {
-      y: dt.getFullYear(),
-      m: dt.getMonth() + 1,
-      d: dt.getDate(),
-    };
+    return { y: dt.getFullYear(), m: dt.getMonth() + 1, d: dt.getDate() };
   }
 
   function esDeHoy(r) {
@@ -203,39 +188,29 @@
     if (!f) return false;
 
     const hoy = new Date();
-    const y  = hoy.getFullYear();
-    const m  = hoy.getMonth() + 1;
-    const d  = hoy.getDate();
-
-    return f.y === y && f.m === m && f.d === d;
+    return f.y === hoy.getFullYear() && f.m === (hoy.getMonth() + 1) && f.d === hoy.getDate();
   }
 
-  // Texto amigable de fecha (dd/mm/yyyy)
   function getFechaTexto(r) {
-    const raw =
-      r.fecha_ingreso || r.created_at || r.fecha || r.fechaIngreso;
+    const raw = r.fecha_ingreso || r.created_at || r.fecha || r.fechaIngreso;
     const f = extraerYMD(raw);
     if (!f) return "-";
     const pad = (n) => String(n).padStart(2, "0");
     return `${pad(f.d)}/${pad(f.m)}/${f.y}`;
   }
 
-  // Separa las órdenes en:
-  //  - hoy: TODAS las de hoy (cualquier estado)
-  //  - pend: NO de hoy y en estado pendiente (no Entregado)
-  function splitPorPendientes(rows) {
+  // ====== Split Hoy vs Pendientes (sin duplicados) ======
+  function splitHoyPend(rows) {
     const hoy = [];
     const pend = [];
 
     (rows || []).forEach(r => {
       const est = mapEstatus(r.id_estatus);
-      const esHoy = esDeHoy(r);
-
-      if (esHoy) {
-        // Siempre va a "Lista de vehículos hoy", sin importar estado
+      if (esDeHoy(r)) {
+        // HOY: todo lo de hoy (cualquier estado)
         hoy.push(r);
       } else {
-        // Solo va a Pendientes si NO es de hoy y está en estado pendiente
+        // PENDIENTES: NO hoy + estado en lista pendiente (no entregado)
         if (ESTADOS_PEND.includes(est)) {
           pend.push(r);
         }
@@ -245,12 +220,12 @@
     return { hoy, pend };
   }
 
-  // ========= RENDER GENÉRICO DE UNA FILA (usando tpl-fila) =========
+  // ====== Construye fila usando template (misma tabla y mismo detalle) ======
   function buildFilaDesdeTemplate(r, idx) {
     const estTexto = mapEstatus(r.id_estatus);
     const frag = tpl.content.cloneNode(true);
 
-    // VIN puede venir como VIN o vin según el backend
+    // VIN puede venir como VIN o vin
     const vinValor = (r.VIN ?? r.vin ?? "").toString();
 
     fill(frag.querySelector(".slot-idx"),       String(idx));
@@ -261,15 +236,10 @@
     const estadoSlot = frag.querySelector(".slot-estado");
     if (estadoSlot) {
       estadoSlot.textContent = "";
-      estadoSlot.appendChild(
-        createBadgeElement(estTexto, r.id_estatus || estTexto)
-      );
+      estadoSlot.appendChild(createBadgeElement(estTexto, r.id_estatus || estTexto));
     }
 
-    frag
-      .querySelectorAll("[data-id='__ID__']")
-      .forEach(n => n.setAttribute("data-id", r.id_orden));
-
+    frag.querySelectorAll("[data-id='__ID__']").forEach(n => n.setAttribute("data-id", r.id_orden));
     const det = frag.querySelector(".details");
     det?.setAttribute("data-id", r.id_orden);
 
@@ -288,30 +258,26 @@
     const detEstadoSlot = frag.querySelector(".details .slot-estado");
     if (detEstadoSlot) {
       detEstadoSlot.textContent = "";
-      detEstadoSlot.appendChild(
-        createBadgeElement(estTexto, r.id_estatus || estTexto)
-      );
+      detEstadoSlot.appendChild(createBadgeElement(estTexto, r.id_estatus || estTexto));
     }
 
     const sel = frag.querySelector(".estado-select");
     if (sel) {
-      sel.innerHTML = ESTADOS.map(
-        o => `<option ${o === estTexto ? "selected" : ""}>${o}</option>`
-      ).join("");
+      sel.innerHTML = ESTADOS.map(o => `<option ${o === estTexto ? "selected" : ""}>${o}</option>`).join("");
       sel.dataset.id = r.id_orden;
     }
 
-    // ====== IMPORTANTE: rellenar inputs con lo que venga de la BD ======
+    // ✅ IMPORTANTE: rellenar INPUTS (antes se quedaban en blanco en Recepción)
+    const vinInput = frag.querySelector(".vin-input");
+    if (vinInput) {
+      vinInput.value = vinValor || "";
+      vinInput.dataset.id = r.id_orden;
+    }
+
     const cobroInput = frag.querySelector(".cobro-input");
     if (cobroInput) {
       cobroInput.value = r.cobro || "";
       cobroInput.dataset.id = r.id_orden;
-    }
-
-    const vinInput = frag.querySelector(".vin-input");
-    if (vinInput) {
-      vinInput.value = vinValor;
-      vinInput.dataset.id = r.id_orden;
     }
 
     const mecInput = frag.querySelector(".mecanico-input");
@@ -323,43 +289,29 @@
     return frag;
   }
 
-  // ========= PINTAR LISTA PRINCIPAL =========
   function renderLista(rows) {
     if (!tbody) return;
     tbody.innerHTML = "";
     if (!rows?.length) return;
-
-    rows.forEach((r, i) => {
-      const frag = buildFilaDesdeTemplate(r, i + 1);
-      tbody.appendChild(frag);
-    });
+    rows.forEach((r, i) => tbody.appendChild(buildFilaDesdeTemplate(r, i + 1)));
   }
 
-  // ========= PINTAR TABLA PENDIENTES (usa el mismo template) =========
   function renderPendientes(rows) {
     if (!tbodyPendientes) return;
     tbodyPendientes.innerHTML = "";
     if (!rows?.length) return;
-
-    rows.forEach((r, i) => {
-      const frag = buildFilaDesdeTemplate(r, i + 1);
-      tbodyPendientes.appendChild(frag);
-    });
+    rows.forEach((r, i) => tbodyPendientes.appendChild(buildFilaDesdeTemplate(r, i + 1)));
   }
 
   async function cargarHoy() {
     try {
       const rows = await API.hoy();
-      const { hoy, pend } = splitPorPendientes(rows);
-
-      // TODOS los de hoy (cualquier estado) van aquí:
+      const { hoy, pend } = splitHoyPend(rows);
       renderLista(hoy);
-
-      // Solo NO-hoy + estado pendiente (incluye Recibido) van aquí:
       renderPendientes(pend);
     } catch (e) {
       console.error("Error cargando /api/ordenes/hoy:", e);
-      setMsg("No se pudo cargar la lista de hoy", false);
+      setMsg("No se pudo cargar la lista", false);
       renderLista([]);
       renderPendientes([]);
     }
@@ -376,7 +328,7 @@
         return;
       }
       const frag = document.createDocumentFragment();
-      fotos.forEach((f) => {
+      fotos.forEach(f => {
         const card = document.createElement("div");
         card.className = "foto-item";
         card.style.display = "inline-block";
@@ -385,9 +337,7 @@
 
         const img = document.createElement("img");
         const ruta = String(f.ruta_archivo || "");
-        const src = /^https?:\/\//i.test(ruta)
-          ? ruta
-          : "/" + ruta.replace(/^\/+/, "");
+        const src = /^https?:\/\//i.test(ruta) ? ruta : "/" + ruta.replace(/^\/+/, "");
         img.src = src;
         img.alt = f.nombre_original || "foto";
         img.style.width = "120px";
@@ -413,8 +363,7 @@
       grid.appendChild(frag);
     } catch (e) {
       console.error("No se pudieron cargar fotos:", e);
-      grid.innerHTML =
-        "<div class='small text-danger'>Error al cargar fotos.</div>";
+      grid.innerHTML = "<div class='small text-danger'>Error al cargar fotos.</div>";
     }
   }
 
@@ -440,7 +389,7 @@
     $("#clienteNombre")?.focus();
   });
 
-  // ====== HANDLER COMPARTIDO PARA AMBAS TABLAS ======
+  // ====== HANDLER COMPARTIDO PARA AMBAS TABLAS (HOY y PENDIENTES) ======
   async function handleTableClick(e) {
     const btnToggle  = e.target.closest(".toggle-detalle");
     const btnGuardar = e.target.closest(".guardar-cambios");
@@ -475,14 +424,19 @@
         trDetalle.style.display = "none";
         panel.setAttribute("hidden", "");
         btnToggle.textContent = "Más info";
+
         const S = CAM.get(id);
         if (S?.stream) { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; }
+
         const v = $(`video.cam-preview[data-id="${id}"]`);
         if (v) { v.srcObject = null; v.style.display = "none"; }
+
         const shotBtn = $(`.cam-foto[data-id="${id}"]`);
         if (shotBtn) shotBtn.disabled = true;
+
         const cancelBtn = $(`.cam-cancel[data-id="${id}"]`);
         if (cancelBtn) cancelBtn.disabled = true;
+
         const camOnBtn = $(`.cam-abrir[data-id="${id}"]`);
         if (camOnBtn) camOnBtn.disabled = false;
       }
@@ -516,14 +470,17 @@
       const id = btnShot.dataset.id;
       const v = $(`video.cam-preview[data-id="${id}"]`);
       if (!v?.videoWidth) return;
+
       const c = document.createElement("canvas");
       c.width = v.videoWidth; c.height = v.videoHeight;
       c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+
       c.toBlob(blob => {
         if (!blob) return;
         const file = new File([blob], `foto-${Date.now()}.jpg`, { type:"image/jpeg" });
         const S = CAM.get(id) || { stream:null, captures:[] };
         S.captures.push(file); CAM.set(id, S);
+
         const grid = $(`.fotos-grid[data-id="${id}"]`);
         if (grid) {
           const img = document.createElement("img");
@@ -579,10 +536,25 @@
 
       try {
         const payload = {};
+
+        // Estado siempre lo mandamos si existe
         if (sel?.value) payload.estado = sel.value;
-        if (vinEl) payload.vin = (vinEl.value || "").trim();
-        if (cobroEl) { payload.cobro = (cobroEl.value || "").trim(); }
-        if (mecanicoEl) { payload.mecanico = (mecanicoEl.value || "").trim(); }
+
+        // ✅ CLAVE: NO mandar vacíos por accidente (evita borrar BD)
+        if (vinEl) {
+          const v = (vinEl.value || "").trim();
+          if (v !== "") payload.vin = v;
+        }
+
+        if (cobroEl) {
+          const c = (cobroEl.value || "").trim();
+          if (c !== "") payload.cobro = c;
+        }
+
+        if (mecanicoEl) {
+          const m = (mecanicoEl.value || "").trim();
+          if (m !== "") payload.mecanico = m;
+        }
 
         await API.patch(id, payload);
 
@@ -590,14 +562,16 @@
         const bag = [];
         if (fotosInput?.files?.length) bag.push(...fotosInput.files);
         if (S.captures?.length)       bag.push(...S.captures);
+
         if (bag.length) {
           await API.fotos.upload(id, bag);
           if (fotosInput) fotosInput.value = "";
           S.captures = []; CAM.set(id, S);
           await cargarFotos(id);
         }
+
         okSpan?.classList.remove("d-none"); errSpan?.classList.add("d-none");
-        await cargarHoy(); // recarga lista + pendientes con datos actualizados
+        await cargarHoy();
         setTimeout(() => okSpan?.classList.add("d-none"), 1500);
       } catch (err) {
         console.error("Error guardando:", err);
@@ -626,16 +600,8 @@
       if (!confirm("¿Seguro borrar esta orden?")) return;
       try {
         await API.delete(id);
-        const tr = btnBorrar.closest("tr");
-        const next = tr?.nextElementSibling;
-        if (next && next.classList.contains("row-details")) next.remove();
-        if (tr) tr.remove();
-        // Reindex de la tabla principal (pero luego cargarHoy vuelve a dibujar todo)
-        $$("#tabla-lista > tr:not(.row-details) .slot-idx").forEach(
-          (td, i) => (td.textContent = String(i + 1))
-        );
         setMsg("Registro borrado.");
-        await cargarHoy(); // refresca también pendientes
+        await cargarHoy();
       } catch (err) {
         console.error(err);
         setMsg(err.message || "No se pudo borrar", false);
@@ -644,22 +610,18 @@
     }
   }
 
-  // Cambio de estado → actualizar badge en detalle (para ambas tablas)
   function handleTableChange(e) {
     const sel = e.target.closest(".estado-select");
     if (!sel) return;
     const id = sel.dataset.id;
     const detEstadoSlot = $(`.details[data-id="${id}"] .slot-estado`);
-
     if (detEstadoSlot) {
       detEstadoSlot.textContent = "";
-      detEstadoSlot.appendChild(
-        createBadgeElement(sel.value, sel.value)
-      );
+      detEstadoSlot.appendChild(createBadgeElement(sel.value, sel.value));
     }
   }
 
-  // Asignar handlers a las 2 tablas
+  // ✅ listeners para ambas tablas (HOY y PENDIENTES)
   tbody?.addEventListener("click", handleTableClick);
   tbodyPendientes?.addEventListener("click", handleTableClick);
 
@@ -701,20 +663,12 @@
 
   function togglePantallaCompleta(card, btn) {
     if (!card) return;
-    if (card.dataset.full === "1") {
-      salirPantallaCompleta(card, btn);
-    } else {
-      entrarPantallaCompleta(card, btn);
-    }
+    if (card.dataset.full === "1") salirPantallaCompleta(card, btn);
+    else entrarPantallaCompleta(card, btn);
   }
 
-  btnFullLista?.addEventListener("click", () => {
-    togglePantallaCompleta(cardLista, btnFullLista);
-  });
-
-  btnFullPend?.addEventListener("click", () => {
-    togglePantallaCompleta(cardPend, btnFullPend);
-  });
+  btnFullLista?.addEventListener("click", () => togglePantallaCompleta(cardLista, btnFullLista));
+  btnFullPend?.addEventListener("click", () => togglePantallaCompleta(cardPend, btnFullPend));
 
   // ====== INICIO ======
   cargarHoy();
