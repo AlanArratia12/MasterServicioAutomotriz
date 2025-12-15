@@ -30,7 +30,9 @@
   ];
 
   // Estados que pertenecen a la tabla Pendientes
+  // (para días anteriores; hoy siempre va a "Lista de vehículos hoy")
   const ESTADOS_PEND = [
+    "Recibido",
     "Diagnóstico",
     "En espera de refacciones",
     "Reparación",
@@ -170,39 +172,73 @@
     if (el) el.textContent = text ?? "";
   }
 
-  // Fecha de ingreso: usamos solo la parte de fecha para evitar desfase
+  // ====== FECHA: helpers para evitar broncas de huso horario ======
+  function extraerYMD(raw) {
+    if (!raw) return null;
+    const str = String(raw);
+
+    // Caso típico: 'YYYY-MM-DD...' → usamos solo esa parte
+    const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) {
+      const y  = parseInt(m[1], 10);
+      const mo = parseInt(m[2], 10);
+      const d  = parseInt(m[3], 10);
+      return { y, m: mo, d };
+    }
+
+    // Fallback: intentar con Date normal
+    const dt = new Date(str);
+    if (isNaN(dt.getTime())) return null;
+
+    return {
+      y: dt.getFullYear(),
+      m: dt.getMonth() + 1,
+      d: dt.getDate(),
+    };
+  }
+
+  function esDeHoy(r) {
+    const raw = r.fecha_ingreso || r.created_at || r.fecha || r.fechaIngreso;
+    const f = extraerYMD(raw);
+    if (!f) return false;
+
+    const hoy = new Date();
+    const y  = hoy.getFullYear();
+    const m  = hoy.getMonth() + 1;
+    const d  = hoy.getDate();
+
+    return f.y === y && f.m === m && f.d === d;
+  }
+
+  // Texto amigable de fecha (dd/mm/yyyy)
   function getFechaTexto(r) {
     const raw =
       r.fecha_ingreso || r.created_at || r.fecha || r.fechaIngreso;
-    if (!raw) return "-";
-
-    const str = String(raw);
-    const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) {
-      const [, y, mo, d] = m;
-      return `${d}/${mo}/${y}`; // 04/12/2025
-    }
-
-    const d = new Date(str);
-    if (!isNaN(d.getTime())) {
-      const pad = (n) => String(n).padStart(2, "0");
-      return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
-    }
-
-    return str.slice(0, 16);
+    const f = extraerYMD(raw);
+    if (!f) return "-";
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${pad(f.d)}/${pad(f.m)}/${f.y}`;
   }
 
-  // Separa las órdenes en 2 listas: las que van en "hoy" y las de "pendientes"
+  // Separa las órdenes en:
+  //  - hoy: TODAS las de hoy (cualquier estado)
+  //  - pend: NO de hoy y en estado pendiente (no Entregado)
   function splitPorPendientes(rows) {
     const hoy = [];
     const pend = [];
 
     (rows || []).forEach(r => {
       const est = mapEstatus(r.id_estatus);
-      if (ESTADOS_PEND.includes(est)) {
-        pend.push(r);     // va a la tabla de Pendientes
+      const esHoy = esDeHoy(r);
+
+      if (esHoy) {
+        // Siempre va a "Lista de vehículos hoy", sin importar estado
+        hoy.push(r);
       } else {
-        hoy.push(r);      // se queda en Lista de vehículos hoy
+        // Solo va a Pendientes si NO es de hoy y está en estado pendiente
+        if (ESTADOS_PEND.includes(est)) {
+          pend.push(r);
+        }
       }
     });
 
@@ -308,8 +344,11 @@
       const rows = await API.hoy();
       const { hoy, pend } = splitPorPendientes(rows);
 
-      renderLista(hoy);       // Solo los que NO son pendientes
-      renderPendientes(pend); // Diagnóstico / En espera / Reparación / Listo
+      // TODOS los de hoy (cualquier estado) van aquí:
+      renderLista(hoy);
+
+      // Solo NO-hoy + estado pendiente (incluye Recibido) van aquí:
+      renderPendientes(pend);
     } catch (e) {
       console.error("Error cargando /api/ordenes/hoy:", e);
       setMsg("No se pudo cargar la lista de hoy", false);
