@@ -5,17 +5,21 @@
 
   const form      = $("#form-recepcion");
   const btnClear  = $("#btn-limpiar");
-  const tbody     = $("#tabla-lista");
   const msg       = $("#msg-orden");
   const tpl       = $("#tpl-fila");
 
-  // Cards y botones de pantalla completa
-  const cardLista     = $("#card-lista-hoy");
-  const btnFullLista  = $("#btn-fullscreen-hoy");
-  const cardPend      = $("#card-pendientes");
-  const btnFullPend   = $("#btn-fullscreen-pendientes");
+  // Tabla HOY
+  const tbodyHoy = $("#tabla-lista");
 
-  // Tabla de pendientes
+  // Card + fullscreen HOY
+  const cardLista    = $("#card-lista-hoy");
+  const btnFullLista = $("#btn-fullscreen-hoy");
+
+  // Card + fullscreen PENDIENTES
+  const cardPend    = $("#card-pendientes");
+  const btnFullPend = $("#btn-fullscreen-pendientes");
+
+  // Tabla PENDIENTES
   const tbodyPendientes = $("#tbody-pendientes");
 
   const CAM = new Map();
@@ -29,7 +33,7 @@
     "Entregado",
   ];
 
-  // Pendientes (solo si NO es de hoy). Incluye Recibido porque a veces se quedan para el día siguiente.
+  // PENDIENTES incluye RECIBIDO también (porque a veces quedan para el día siguiente)
   const ESTADOS_PEND = [
     "Recibido",
     "Diagnóstico",
@@ -74,10 +78,7 @@
         for (const f of filesOrBlobs) {
           fd.append("fotos", f, f.name || `foto-${Date.now()}.jpg`);
         }
-        const res = await fetch(`/api/ordenes/${ordenId}/fotos`, {
-          method: "POST",
-          body: fd,
-        });
+        const res = await fetch(`/api/ordenes/${ordenId}/fotos`, { method: "POST", body: fd });
         if (!res.ok) throw await parseError(res);
         return res.json();
       },
@@ -129,7 +130,6 @@
 
   function getEstatusStyles(id) {
     let s = { bg: "#dbeafe", fg: "#1e3a8a", br: "#bfdbfe" }; // Recibido
-
     const num = Number(id);
     const text = String(id).toLowerCase();
 
@@ -160,147 +160,208 @@
     badge.style.backgroundColor = estilo.bg;
     badge.style.color = estilo.fg;
     badge.style.border = "1px solid " + estilo.br;
-
     return badge;
   }
 
-  function fill(el, text) {
-    if (el) el.textContent = text ?? "";
+  function fill(el, text) { if (el) el.textContent = text ?? ""; }
+
+  // ========= TELÉFONOS (formato en vivo y en detalle) =========
+  function formatTelefono(value) {
+    const nums = String(value || "").replace(/\D/g, "").slice(0, 10);
+    if (nums.length <= 3) return nums;
+    if (nums.length <= 6) return `${nums.slice(0,3)}-${nums.slice(3)}`;
+    return `${nums.slice(0,3)}-${nums.slice(3,6)}-${nums.slice(6)}`;
   }
 
-  // ===== FECHAS (sin desfases por timezone) =====
-  function extraerYMD(raw) {
-    if (!raw) return null;
-    const str = String(raw);
-    const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) return { y: +m[1], m: +m[2], d: +m[3] };
-    const dt = new Date(str);
-    if (isNaN(dt.getTime())) return null;
-    return { y: dt.getFullYear(), m: dt.getMonth() + 1, d: dt.getDate() };
+  // Formato en vivo mientras escribes
+  ["#telefono1", "#telefono2"].forEach(sel => {
+    const input = document.querySelector(sel);
+    if (!input) return;
+    input.addEventListener("input", () => {
+      input.value = formatTelefono(input.value);
+    });
+  });
+
+  // ====== FECHAS (MX) ======
+  function todayKeyMX() {
+    return new Date().toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" }); // YYYY-MM-DD
   }
 
-  function esDeHoy(r) {
-    const raw = r.fecha_ingreso || r.created_at || r.fecha || r.fechaIngreso;
-    const f = extraerYMD(raw);
-    if (!f) return false;
-    const hoy = new Date();
-    return f.y === hoy.getFullYear() && f.m === (hoy.getMonth() + 1) && f.d === hoy.getDate();
+  function dateKeyMX(raw) {
+    if (!raw) return "";
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) {
+      const m = String(raw).match(/^(\d{4}-\d{2}-\d{2})/);
+      return m ? m[1] : "";
+    }
+    return d.toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
   }
 
   function getFechaTexto(r) {
     const raw = r.fecha_ingreso || r.created_at || r.fecha || r.fechaIngreso;
-    const f = extraerYMD(raw);
-    if (!f) return "-";
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${pad(f.d)}/${pad(f.m)}/${f.y}`;
+    if (!raw) return "-";
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      const parts = new Intl.DateTimeFormat("es-MX", {
+        timeZone: "America/Mexico_City",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).formatToParts(d);
+      const y  = parts.find(p => p.type === "year")?.value;
+      const mo = parts.find(p => p.type === "month")?.value;
+      const da = parts.find(p => p.type === "day")?.value;
+      return `${da}/${mo}/${y}`;
+    }
+    const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) {
+      const [, y, mo, da] = m;
+      return `${da}/${mo}/${y}`;
+    }
+    return String(raw).slice(0, 16);
   }
 
-  // HOY: todo lo ingresado hoy (cualquier estado)
-  // PEND: NO hoy + estado en Recibido/Diagnóstico/Espera/Reparación/Listo
+  // ====== SPLIT HOY vs PENDIENTES (regla final) ======
   function splitHoyPend(rows) {
     const hoy = [];
     const pend = [];
+    const hoyKey = todayKeyMX();
+
     (rows || []).forEach(r => {
       const est = mapEstatus(r.id_estatus);
-      if (esDeHoy(r)) hoy.push(r);
-      else if (ESTADOS_PEND.includes(est)) pend.push(r);
+      const k = dateKeyMX(r.fecha_ingreso);
+
+      // HOY: todo lo ingresado HOY (cualquier estado, incluso entregado)
+      if (k === hoyKey) {
+        hoy.push(r);
+        return;
+      }
+
+      // NO es hoy:
+      // Pendientes: estado en ESTADOS_PEND y NO entregado
+      if (ESTADOS_PEND.includes(est) && est !== "Entregado") {
+        pend.push(r);
+      }
     });
+
     return { hoy, pend };
   }
 
-  // Construye filas usando el mismo template (para HOY y PENDIENTES)
+  // ====== Construye fila+detalle desde template ======
   function buildFila(r, idx) {
-    const estTexto = mapEstatus(r.id_estatus);
     const frag = tpl.content.cloneNode(true);
-
-    // VIN puede venir como VIN o vin
-    const vinValor = (r.VIN ?? r.vin ?? "").toString();
+    const estTexto = mapEstatus(r.id_estatus);
 
     fill(frag.querySelector(".slot-idx"), String(idx));
     fill(frag.querySelector(".slot-cliente"), r.cliente || "");
     fill(frag.querySelector(".slot-auto"), autoText(r));
     fill(frag.querySelector(".slot-falla"), r.falla || "");
 
+    // Badge principal
     const estadoSlot = frag.querySelector(".slot-estado");
     if (estadoSlot) {
       estadoSlot.textContent = "";
       estadoSlot.appendChild(createBadgeElement(estTexto, r.id_estatus || estTexto));
     }
 
+    // Set data-id
     frag.querySelectorAll("[data-id='__ID__']").forEach(n => n.setAttribute("data-id", r.id_orden));
-    const det = frag.querySelector(".details");
-    det?.setAttribute("data-id", r.id_orden);
+    const panel = frag.querySelector(".details");
+    panel?.setAttribute("data-id", r.id_orden);
 
+    // Detalles
     fill(frag.querySelector(".slot-det-cliente"),  r.cliente || "");
-    fill(frag.querySelector(".slot-det-tel1"),     r.telefono1 || "");
-    fill(frag.querySelector(".slot-det-tel2"),     r.telefono2 || "-");
+
+    // Teléfonos formateados (en "Más info")
+    fill(frag.querySelector(".slot-det-tel1"), r.telefono1 ? formatTelefono(r.telefono1) : "");
+    fill(frag.querySelector(".slot-det-tel2"), r.telefono2 ? formatTelefono(r.telefono2) : "-");
+
     fill(frag.querySelector(".slot-det-marca"),    r.marca || "");
     fill(frag.querySelector(".slot-det-modelo"),   r.modelo || "");
     fill(frag.querySelector(".slot-det-anio"),     r.anio ?? "");
     fill(frag.querySelector(".slot-det-color"),    r.color || "");
-    fill(frag.querySelector(".slot-det-vin"),      vinValor || "-");
     fill(frag.querySelector(".slot-det-falla"),    r.falla || "");
-    fill(frag.querySelector(".slot-det-mecanico"), r.mecanico || "-");
     fill(frag.querySelector(".slot-det-fecha"),    getFechaTexto(r));
 
-    const detEstadoSlot = frag.querySelector(".details .slot-estado");
-    if (detEstadoSlot) {
-      detEstadoSlot.textContent = "";
-      detEstadoSlot.appendChild(createBadgeElement(estTexto, r.id_estatus || estTexto));
-    }
-
-    const sel = frag.querySelector(".estado-select");
-    if (sel) {
-      sel.innerHTML = ESTADOS.map(o => `<option ${o === estTexto ? "selected" : ""}>${o}</option>`).join("");
-      sel.dataset.id = r.id_orden;
-    }
-
-    // ✅ RELLENAR INPUTS (lo que faltaba)
+    // VIN
+    const vinValor = (r.VIN ?? r.vin ?? r.Vin ?? "").toString();
+    fill(frag.querySelector(".slot-det-vin"), vinValor || "-");
     const vinInput = frag.querySelector(".vin-input");
     if (vinInput) {
       vinInput.value = vinValor || "";
       vinInput.dataset.id = r.id_orden;
     }
 
+    // Mecánico
+    const mecValor = (r.mecanico ?? r.mecanico_reparo ?? "").toString();
+    fill(frag.querySelector(".slot-det-mecanico"), mecValor || "-");
+    const mecInput = frag.querySelector(".mecanico-input");
+    if (mecInput) {
+      mecInput.value = mecValor || "";
+      mecInput.dataset.id = r.id_orden;
+    }
+
+    // Cobro (admin)
+    const cobroValor = (r.cobro ?? "").toString();
     const cobroInput = frag.querySelector(".cobro-input");
     if (cobroInput) {
-      cobroInput.value = r.cobro || "";
+      cobroInput.value = cobroValor || "";
       cobroInput.dataset.id = r.id_orden;
     }
 
-    const mecInput = frag.querySelector(".mecanico-input");
-    if (mecInput) {
-      mecInput.value = r.mecanico || "";
-      mecInput.dataset.id = r.id_orden;
+    // Badge en detalle
+    const detEstadoSlot = frag.querySelector(".details .slot-estado");
+    if (detEstadoSlot) {
+      detEstadoSlot.textContent = "";
+      detEstadoSlot.appendChild(createBadgeElement(estTexto, r.id_estatus || estTexto));
+    }
+
+    // Select estado
+    const sel = frag.querySelector(".estado-select");
+    if (sel) {
+      sel.innerHTML = ESTADOS
+        .map(o => `<option ${o === estTexto ? "selected" : ""}>${o}</option>`)
+        .join("");
+      sel.dataset.id = r.id_orden;
     }
 
     return frag;
   }
 
-  function renderLista(rows) {
-    if (!tbody) return;
-    tbody.innerHTML = "";
+  // ====== Render HOY ======
+  function renderHoy(rows) {
+    if (!tbodyHoy) return;
+    tbodyHoy.innerHTML = "";
     if (!rows?.length) return;
-    rows.forEach((r, i) => tbody.appendChild(buildFila(r, i + 1)));
+
+    rows.forEach((r, i) => {
+      tbodyHoy.appendChild(buildFila(r, i + 1));
+    });
   }
 
+  // ====== Render PENDIENTES ======
   function renderPendientes(rows) {
     if (!tbodyPendientes) return;
     tbodyPendientes.innerHTML = "";
     if (!rows?.length) return;
-    rows.forEach((r, i) => tbodyPendientes.appendChild(buildFila(r, i + 1)));
+
+    rows.forEach((r, i) => {
+      const frag = buildFila(r, i + 1);
+      frag.querySelectorAll("tr").forEach(tr => tr.classList.add("pendiente"));
+      tbodyPendientes.appendChild(frag);
+    });
   }
 
-  async function cargarHoy() {
+  async function cargarRecepcion() {
     try {
       const rows = await API.hoy();
       const { hoy, pend } = splitHoyPend(rows);
-      renderLista(hoy);
+      renderHoy(hoy);
       renderPendientes(pend);
     } catch (e) {
       console.error("Error cargando /api/ordenes/hoy:", e);
-      setMsg("No se pudo cargar la lista", false);
-      renderLista([]);
+      setMsg("No se pudo cargar la recepción", false);
+      renderHoy([]);
       renderPendientes([]);
     }
   }
@@ -355,7 +416,7 @@
     }
   }
 
-  // ====== FORMULARIO ======
+  // ====== FORM ======
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!form.reportValidity()) return;
@@ -365,19 +426,25 @@
       setMsg("Orden creada correctamente");
       form.reset();
       $("#clienteNombre")?.focus();
-      await cargarHoy();
+      await cargarRecepcion();
     } catch (err) {
       console.error("Error creando orden:", err);
       setMsg(err.message || "No se pudo crear la orden", false);
     }
   });
 
+  // ✅ LIMPIAR con confirmación (más seguro)
   btnClear?.addEventListener("click", () => {
-    form?.reset();
+    if (!form) return;
+    const seguro = confirm(
+      "⚠️ ¿Seguro que deseas limpiar el formulario?\n\nLos datos capturados se perderán."
+    );
+    if (!seguro) return;
+    form.reset();
     $("#clienteNombre")?.focus();
   });
 
-  // ====== CLICK COMPARTIDO PARA AMBAS TABLAS (HOY y PENDIENTES) ======
+  // ====== Click handler reutilizable para HOY y PENDIENTES ======
   async function handleTableClick(e) {
     const btnToggle  = e.target.closest(".toggle-detalle");
     const btnGuardar = e.target.closest(".guardar-cambios");
@@ -390,8 +457,7 @@
     if (btnToggle) {
       const id = btnToggle.dataset.id;
       const trPrincipal = btnToggle.closest("tr");
-      const trDetalle   = trPrincipal.nextElementSibling;
-
+      const trDetalle   = trPrincipal?.nextElementSibling;
       const panel = trDetalle?.querySelector(".details");
       if (!panel || !trDetalle) return;
 
@@ -405,26 +471,21 @@
         trDetalle.style.display = "table-row";
         panel.removeAttribute("hidden");
         btnToggle.textContent = "Menos info";
-        if (!CAM.has(id)) CAM.set(id, { stream:null, captures:[] });
+        if (!CAM.has(id)) CAM.set(id, { stream: null, captures: [] });
         await cargarFotos(id);
       } else {
         trDetalle.setAttribute("hidden", "");
         trDetalle.style.display = "none";
         panel.setAttribute("hidden", "");
         btnToggle.textContent = "Más info";
-
         const S = CAM.get(id);
         if (S?.stream) { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; }
-
         const v = $(`video.cam-preview[data-id="${id}"]`);
         if (v) { v.srcObject = null; v.style.display = "none"; }
-
         const shotBtn = $(`.cam-foto[data-id="${id}"]`);
         if (shotBtn) shotBtn.disabled = true;
-
         const cancelBtn = $(`.cam-cancel[data-id="${id}"]`);
         if (cancelBtn) cancelBtn.disabled = true;
-
         const camOnBtn = $(`.cam-abrir[data-id="${id}"]`);
         if (camOnBtn) camOnBtn.disabled = false;
       }
@@ -444,7 +505,7 @@
         if (cancelBtn) cancelBtn.disabled = false;
         btnCamOn.disabled = true;
 
-        const S = CAM.get(id) || { stream:null, captures:[] };
+        const S = CAM.get(id) || { stream: null, captures: [] };
         if (S.stream) S.stream.getTracks().forEach(t => t.stop());
         S.stream = stream; CAM.set(id, S);
       } catch (err) {
@@ -458,15 +519,13 @@
       const id = btnShot.dataset.id;
       const v = $(`video.cam-preview[data-id="${id}"]`);
       if (!v?.videoWidth) return;
-
       const c = document.createElement("canvas");
       c.width = v.videoWidth; c.height = v.videoHeight;
       c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
-
       c.toBlob(blob => {
         if (!blob) return;
-        const file = new File([blob], `foto-${Date.now()}.jpg`, { type:"image/jpeg" });
-        const S = CAM.get(id) || { stream:null, captures:[] };
+        const file = new File([blob], `foto-${Date.now()}.jpg`, { type: "image/jpeg" });
+        const S = CAM.get(id) || { stream: null, captures: [] };
         S.captures.push(file); CAM.set(id, S);
 
         const grid = $(`.fotos-grid[data-id="${id}"]`);
@@ -510,46 +569,32 @@
       return;
     }
 
-    // ✅ FIX REAL: al guardar, actualizamos DOM local y solo recargamos si el ESTADO cambia (para mover entre HOY/PEND).
     if (btnGuardar) {
-      const id    = btnGuardar.dataset.id;
+      const id = btnGuardar.dataset.id;
       const panel = $(`.details[data-id="${id}"]`);
-
-      const sel        = panel?.querySelector(".estado-select");
-      const vinEl      = panel?.querySelector(".vin-input");
-      const cobroEl    = panel?.querySelector(".cobro-input");
+      const sel = panel?.querySelector(".estado-select");
+      const vinEl = panel?.querySelector(".vin-input");
+      const cobroEl = panel?.querySelector(".cobro-input");
       const mecanicoEl = panel?.querySelector(".mecanico-input");
-      const fotosInput = panel?.querySelector(`.fotos-input[data-id="${id}"]`);
 
+      const fotosInput = panel?.querySelector(`.fotos-input[data-id="${id}"]`);
       const okSpan  = panel?.querySelector(`.save-ok`);
       const errSpan = panel?.querySelector(`.save-err`);
 
-      // para saber si cambia de estado y requiere recarga total
-      const estadoActualBadge = panel?.querySelector(".slot-estado")?.textContent?.trim() || "";
-      const nuevoEstado = sel?.value?.trim() || "";
-
       try {
         const payload = {};
-
-        if (nuevoEstado) payload.estado = nuevoEstado;
-
-        const vinVal = (vinEl?.value || "").trim();
-        const cobroVal = (cobroEl?.value || "").trim();
-        const mecVal = (mecanicoEl?.value || "").trim();
-
-        // ✅ NO mandar vacíos (evita borrar valores en BD)
-        if (vinVal !== "") payload.vin = vinVal;
-        if (cobroVal !== "") payload.cobro = cobroVal;
-        if (mecVal !== "") payload.mecanico = mecVal;
+        if (sel?.value) payload.estado = sel.value;
+        if (vinEl) payload.vin = (vinEl.value || "").trim();
+        if (cobroEl) payload.cobro = (cobroEl.value || "").trim();
+        if (mecanicoEl) payload.mecanico = (mecanicoEl.value || "").trim();
 
         await API.patch(id, payload);
 
-        // Subir fotos si hay
-        const S = CAM.get(id) || { captures:[] };
+        // SUBIR FOTOS
+        const S = CAM.get(id) || { captures: [] };
         const bag = [];
         if (fotosInput?.files?.length) bag.push(...fotosInput.files);
-        if (S.captures?.length)       bag.push(...S.captures);
-
+        if (S.captures?.length) bag.push(...S.captures);
         if (bag.length) {
           await API.fotos.upload(id, bag);
           if (fotosInput) fotosInput.value = "";
@@ -557,37 +602,21 @@
           await cargarFotos(id);
         }
 
-        // ✅ ACTUALIZAR DOM LOCAL (esto evita que se vea "en blanco" por /api/ordenes/hoy incompleto)
-        const vinSpan = panel.querySelector(".slot-det-vin");
-        if (vinSpan) vinSpan.textContent = vinVal || (vinSpan.textContent || "-");
+        // Actualiza DOM local (para que no se vea "en blanco" aunque no recargue)
+        const vinSpan = $(`.details[data-id="${id}"] .slot-det-vin`);
+        if (vinSpan) vinSpan.textContent = payload.vin ? payload.vin : "-";
 
-        const mecSpan = panel.querySelector(".slot-det-mecanico");
-        if (mecSpan) mecSpan.textContent = mecVal || (mecSpan.textContent || "-");
-
-        const estadoBadge = panel.querySelector(".slot-estado");
-        if (estadoBadge && nuevoEstado) {
-          estadoBadge.textContent = "";
-          estadoBadge.appendChild(createBadgeElement(nuevoEstado, nuevoEstado));
-        }
-
-        // También actualizar badge de la fila principal
-        const btnRow = document.querySelector(`.toggle-detalle[data-id="${id}"]`);
-        const trPrincipal = btnRow?.closest("tr");
-        const filaEstadoSlot = trPrincipal?.querySelector(".slot-estado");
-        if (filaEstadoSlot && nuevoEstado) {
-          filaEstadoSlot.textContent = "";
-          filaEstadoSlot.appendChild(createBadgeElement(nuevoEstado, nuevoEstado));
-        }
+        const mecSpan = $(`.details[data-id="${id}"] .slot-det-mecanico`);
+        if (mecSpan) mecSpan.textContent = payload.mecanico ? payload.mecanico : "-";
 
         okSpan?.classList.remove("d-none");
         errSpan?.classList.add("d-none");
         setTimeout(() => okSpan?.classList.add("d-none"), 1500);
 
-        // ✅ Solo recargar si cambió el estado (por si se mueve de HOY a PEND o sale por ENTREGADO)
-        if (nuevoEstado && estadoActualBadge && nuevoEstado.toLowerCase() !== estadoActualBadge.toLowerCase()) {
-          await cargarHoy();
+        // Si cambiaste estado, puede moverse entre HOY/PENDIENTES => recarga
+        if (payload.estado) {
+          await cargarRecepcion();
         }
-
       } catch (err) {
         console.error("Error guardando:", err);
         okSpan?.classList.add("d-none");
@@ -616,8 +645,8 @@
       if (!confirm("¿Seguro borrar esta orden?")) return;
       try {
         await API.delete(id);
+        await cargarRecepcion();
         setMsg("Registro borrado.");
-        await cargarHoy();
       } catch (err) {
         console.error(err);
         setMsg(err.message || "No se pudo borrar", false);
@@ -626,7 +655,12 @@
     }
   }
 
-  function handleTableChange(e) {
+  // Click en HOY y PENDIENTES
+  tbodyHoy?.addEventListener("click", handleTableClick);
+  tbodyPendientes?.addEventListener("click", handleTableClick);
+
+  // Cambio de estado (actualiza badge visual inmediato)
+  function handleChange(e) {
     const sel = e.target.closest(".estado-select");
     if (!sel) return;
     const id = sel.dataset.id;
@@ -636,24 +670,19 @@
       detEstadoSlot.appendChild(createBadgeElement(sel.value, sel.value));
     }
   }
+  tbodyHoy?.addEventListener("change", handleChange);
+  tbodyPendientes?.addEventListener("change", handleChange);
 
-  // listeners para ambas tablas
-  tbody?.addEventListener("click", handleTableClick);
-  tbodyPendientes?.addEventListener("click", handleTableClick);
-
-  tbody?.addEventListener("change", handleTableChange);
-  tbodyPendientes?.addEventListener("change", handleTableChange);
-
-  // ====== PANTALLA COMPLETA (HOY y PENDIENTES) ======
+  // ====== Pantalla completa (HOY y PENDIENTES) ======
   function entrarPantallaCompleta(card, btn) {
     if (!card) return;
     card.dataset.full = "1";
     card.style.position = "fixed";
-    card.style.top      = "0";
-    card.style.left     = "0";
-    card.style.width    = "100vw";
-    card.style.height   = "100vh";
-    card.style.zIndex   = "99999";
+    card.style.top = "0";
+    card.style.left = "0";
+    card.style.width = "100vw";
+    card.style.height = "100vh";
+    card.style.zIndex = "99999";
     card.style.background = "#fff";
     card.style.overflowY = "auto";
     card.style.paddingBottom = "250px";
@@ -665,11 +694,11 @@
     if (!card) return;
     delete card.dataset.full;
     card.style.position = "";
-    card.style.top      = "";
-    card.style.left     = "";
-    card.style.width    = "";
-    card.style.height   = "";
-    card.style.zIndex   = "";
+    card.style.top = "";
+    card.style.left = "";
+    card.style.width = "";
+    card.style.height = "";
+    card.style.zIndex = "";
     card.style.background = "";
     card.style.overflowY = "";
     card.style.paddingBottom = "";
@@ -687,5 +716,5 @@
   btnFullPend?.addEventListener("click", () => togglePantallaCompleta(cardPend, btnFullPend));
 
   // ====== INICIO ======
-  cargarHoy();
+  cargarRecepcion();
 })();
