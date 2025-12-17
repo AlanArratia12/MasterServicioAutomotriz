@@ -33,7 +33,7 @@
     "Entregado",
   ];
 
-  // Pendientes incluye Recibido también (cuando se queda para el siguiente día)
+  // Pendientes incluye Recibido (si se quedó para el siguiente día)
   const ESTADOS_PEND = [
     "Recibido",
     "Diagnóstico",
@@ -166,13 +166,18 @@
   function fill(el, text) { if (el) el.textContent = text ?? ""; }
 
   // ========= TELÉFONO =========
+  function soloDigitos(v) {
+    return String(v || "").replace(/\D/g, "").slice(0, 10);
+  }
+
   function formatTelefono(value) {
-    const nums = String(value || "").replace(/\D/g, "").slice(0, 10);
+    const nums = soloDigitos(value);
     if (nums.length <= 3) return nums;
     if (nums.length <= 6) return `${nums.slice(0,3)}-${nums.slice(3)}`;
     return `${nums.slice(0,3)}-${nums.slice(3,6)}-${nums.slice(6)}`;
   }
 
+  // Formateo visual mientras escribe (pero al guardar mandamos SOLO números)
   ["#telefono1", "#telefono2"].forEach(sel => {
     const input = document.querySelector(sel);
     if (!input) return;
@@ -227,31 +232,25 @@
     return String(raw).slice(0, 16);
   }
 
-  // Timestamp para ordenar: primero el que llegó primero (asc)
   function getTS(r) {
     const raw = getRawFecha(r);
     const d = new Date(raw);
     if (!isNaN(d.getTime())) return d.getTime();
-
-    // fallback YYYY-MM-DD
     const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) {
-      const y = Number(m[1]), mo = Number(m[2]) - 1, da = Number(m[3]);
-      return Date.UTC(y, mo, da);
-    }
+    if (m) return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
     return 0;
   }
 
   function sortAsc(rows) {
     return (rows || []).slice().sort((a, b) => {
       const ta = getTS(a), tb = getTS(b);
-      if (ta !== tb) return ta - tb; // asc (primero el más viejo)
+      if (ta !== tb) return ta - tb;
       const ia = Number(a?.id_orden || 0), ib = Number(b?.id_orden || 0);
-      return ia - ib; // desempate
+      return ia - ib;
     });
   }
 
-  // ====== SPLIT HOY vs PENDIENTES (CORREGIDO) ======
+  // ====== SPLIT HOY vs PENDIENTES ======
   function splitHoyPend(rows) {
     const hoy = [];
     const pend = [];
@@ -261,14 +260,11 @@
       const est = mapEstatus(r.id_estatus);
       const key = dateKeyMX(getRawFecha(r));
 
-      // HOY: todo lo ingresado hoy, cualquier estado
       if (key === hoyKey) {
         hoy.push(r);
         return;
       }
 
-      // NO es hoy:
-      // Pendientes: estados permitidos y NO entregado
       if (ESTADOS_PEND.includes(est) && est !== "Entregado") {
         pend.push(r);
       }
@@ -280,7 +276,6 @@
     };
   }
 
-  // ====== Construye fila+detalle desde template ======
   function buildFila(r, idx) {
     const frag = tpl.content.cloneNode(true);
     const estTexto = mapEstatus(r.id_estatus);
@@ -290,19 +285,16 @@
     fill(frag.querySelector(".slot-auto"), autoText(r));
     fill(frag.querySelector(".slot-falla"), r.falla || "");
 
-    // Badge principal
     const estadoSlot = frag.querySelector(".slot-estado");
     if (estadoSlot) {
       estadoSlot.textContent = "";
       estadoSlot.appendChild(createBadgeElement(estTexto, r.id_estatus || estTexto));
     }
 
-    // data-id
     frag.querySelectorAll("[data-id='__ID__']").forEach(n => n.setAttribute("data-id", r.id_orden));
     const panel = frag.querySelector(".details");
     panel?.setAttribute("data-id", r.id_orden);
 
-    // Detalles
     fill(frag.querySelector(".slot-det-cliente"), r.cliente || "");
     fill(frag.querySelector(".slot-det-tel1"), r.telefono1 ? formatTelefono(r.telefono1) : "");
     fill(frag.querySelector(".slot-det-tel2"), r.telefono2 ? formatTelefono(r.telefono2) : "-");
@@ -314,7 +306,6 @@
     fill(frag.querySelector(".slot-det-falla"), r.falla || "");
     fill(frag.querySelector(".slot-det-fecha"), getFechaTexto(r));
 
-    // VIN
     const vinValor = (r.VIN ?? r.vin ?? r.Vin ?? "").toString();
     fill(frag.querySelector(".slot-det-vin"), vinValor || "-");
     const vinInput = frag.querySelector(".vin-input");
@@ -323,7 +314,6 @@
       vinInput.dataset.id = r.id_orden;
     }
 
-    // Mecánico
     const mecValor = (r.mecanico ?? r.mecanico_reparo ?? "").toString();
     fill(frag.querySelector(".slot-det-mecanico"), mecValor || "-");
     const mecInput = frag.querySelector(".mecanico-input");
@@ -332,7 +322,6 @@
       mecInput.dataset.id = r.id_orden;
     }
 
-    // Cobro
     const cobroValor = (r.cobro ?? "").toString();
     const cobroInput = frag.querySelector(".cobro-input");
     if (cobroInput) {
@@ -340,19 +329,15 @@
       cobroInput.dataset.id = r.id_orden;
     }
 
-    // Badge en detalle
     const detEstadoSlot = frag.querySelector(".details .slot-estado");
     if (detEstadoSlot) {
       detEstadoSlot.textContent = "";
       detEstadoSlot.appendChild(createBadgeElement(estTexto, r.id_estatus || estTexto));
     }
 
-    // Select estado
     const sel = frag.querySelector(".estado-select");
     if (sel) {
-      sel.innerHTML = ESTADOS
-        .map(o => `<option ${o === estTexto ? "selected" : ""}>${o}</option>`)
-        .join("");
+      sel.innerHTML = ESTADOS.map(o => `<option ${o === estTexto ? "selected" : ""}>${o}</option>`).join("");
       sel.dataset.id = r.id_orden;
     }
 
@@ -437,13 +422,22 @@
     }
   }
 
-  // ====== FORM ======
+  // ====== FORM SUBMIT (AQUÍ ESTÁ LA CLAVE: mandamos teléfono SOLO dígitos) ======
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!form.reportValidity()) return;
+
     try {
       const fd = new FormData(form);
+
+      // ✅ Importantísimo: al backend mandamos solo números
+      const tel1Input = $("#telefono1");
+      const tel2Input = $("#telefono2");
+      if (tel1Input) fd.set("telefono1", soloDigitos(tel1Input.value));
+      if (tel2Input) fd.set("telefono2", soloDigitos(tel2Input.value));
+
       await API.crear(fd);
+
       setMsg("Orden creada correctamente");
       form.reset();
       $("#clienteNombre")?.focus();
@@ -463,7 +457,6 @@
     $("#clienteNombre")?.focus();
   });
 
-  // ====== Click handler para HOY y PENDIENTES ======
   async function handleTableClick(e) {
     const btnToggle  = e.target.closest(".toggle-detalle");
     const btnGuardar = e.target.closest(".guardar-cambios");
@@ -511,83 +504,6 @@
       return;
     }
 
-    if (btnCamOn) {
-      const id = btnCamOn.dataset.id;
-      const v = $(`video.cam-preview[data-id="${id}"]`);
-      const shotBtn = $(`.cam-foto[data-id="${id}"]`);
-      const cancelBtn = $(`.cam-cancel[data-id="${id}"]`);
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-        v.srcObject = stream;
-        v.style.display = "block";
-        if (shotBtn) shotBtn.disabled = false;
-        if (cancelBtn) cancelBtn.disabled = false;
-        btnCamOn.disabled = true;
-
-        const S = CAM.get(id) || { stream: null, captures: [] };
-        if (S.stream) S.stream.getTracks().forEach(t => t.stop());
-        S.stream = stream; CAM.set(id, S);
-      } catch (err) {
-        console.error(err);
-        alert("No se pudo abrir la cámara");
-      }
-      return;
-    }
-
-    if (btnShot) {
-      const id = btnShot.dataset.id;
-      const v = $(`video.cam-preview[data-id="${id}"]`);
-      if (!v?.videoWidth) return;
-      const c = document.createElement("canvas");
-      c.width = v.videoWidth; c.height = v.videoHeight;
-      c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
-      c.toBlob(blob => {
-        if (!blob) return;
-        const file = new File([blob], `foto-${Date.now()}.jpg`, { type: "image/jpeg" });
-        const S = CAM.get(id) || { stream: null, captures: [] };
-        S.captures.push(file); CAM.set(id, S);
-
-        const grid = $(`.fotos-grid[data-id="${id}"]`);
-        if (grid) {
-          const img = document.createElement("img");
-          img.src = URL.createObjectURL(file);
-          img.style.width = "120px";
-          img.style.height = "90px";
-          img.style.objectFit = "cover";
-          img.style.borderRadius = "8px";
-          img.style.margin = "6px";
-          grid.appendChild(img);
-        }
-      }, "image/jpeg", 0.92);
-      return;
-    }
-
-    if (btnCancel) {
-      const id = btnCancel.dataset.id;
-      const v = $(`video.cam-preview[data-id="${id}"]`);
-      const S = CAM.get(id);
-
-      if (S?.stream) {
-        S.stream.getTracks().forEach(t => t.stop());
-        S.stream = null;
-        CAM.set(id, S);
-      }
-
-      if (v) {
-        v.srcObject = null;
-        v.style.display = "none";
-      }
-
-      const shotBtn = $(`.cam-foto[data-id="${id}"]`);
-      if (shotBtn) shotBtn.disabled = true;
-
-      const camOnBtn = $(`.cam-abrir[data-id="${id}"]`);
-      if (camOnBtn) camOnBtn.disabled = false;
-
-      btnCancel.disabled = true;
-      return;
-    }
-
     if (btnGuardar) {
       const id = btnGuardar.dataset.id;
       const panel = $(`.details[data-id="${id}"]`);
@@ -624,7 +540,6 @@
         errSpan?.classList.add("d-none");
         setTimeout(() => okSpan?.classList.add("d-none"), 1500);
 
-        // Estado puede mover entre HOY/PENDIENTES, así que recargamos
         await cargarRecepcion();
       } catch (err) {
         console.error("Error guardando:", err);
@@ -632,15 +547,6 @@
         errSpan?.classList.remove("d-none");
         setTimeout(() => errSpan?.classList.add("d-none"), 2000);
       }
-      return;
-    }
-
-    if (btnDelFoto) {
-      const fotoId  = btnDelFoto.dataset.fotoId;
-      const grid    = btnDelFoto.closest(".fotos-grid");
-      const ordenId = grid?.dataset.id;
-      try { await API.fotos.remove(fotoId); await cargarFotos(ordenId); }
-      catch (err) { console.error("No se pudo borrar:", err); }
       return;
     }
 
@@ -676,7 +582,6 @@
   tbodyHoy?.addEventListener("change", handleChange);
   tbodyPendientes?.addEventListener("change", handleChange);
 
-  // ====== Fullscreen ======
   function entrarPantallaCompleta(card, btn) {
     if (!card) return;
     card.dataset.full = "1";
@@ -718,6 +623,5 @@
   btnFullLista?.addEventListener("click", () => togglePantallaCompleta(cardLista, btnFullLista));
   btnFullPend?.addEventListener("click", () => togglePantallaCompleta(cardPend, btnFullPend));
 
-  // ====== INICIO ======
   cargarRecepcion();
 })();
