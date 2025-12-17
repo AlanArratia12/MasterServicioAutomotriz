@@ -33,7 +33,7 @@
     "Entregado",
   ];
 
-  // PENDIENTES incluye RECIBIDO también (porque a veces quedan para el día siguiente)
+  // Pendientes incluye Recibido también (cuando se queda para el siguiente día)
   const ESTADOS_PEND = [
     "Recibido",
     "Diagnóstico",
@@ -129,7 +129,7 @@
   }
 
   function getEstatusStyles(id) {
-    let s = { bg: "#dbeafe", fg: "#1e3a8a", br: "#bfdbfe" }; // Recibido
+    let s = { bg: "#dbeafe", fg: "#1e3a8a", br: "#bfdbfe" };
     const num = Number(id);
     const text = String(id).toLowerCase();
 
@@ -165,7 +165,7 @@
 
   function fill(el, text) { if (el) el.textContent = text ?? ""; }
 
-  // ========= TELÉFONOS (formato en vivo y en detalle) =========
+  // ========= TELÉFONO =========
   function formatTelefono(value) {
     const nums = String(value || "").replace(/\D/g, "").slice(0, 10);
     if (nums.length <= 3) return nums;
@@ -173,7 +173,6 @@
     return `${nums.slice(0,3)}-${nums.slice(3,6)}-${nums.slice(6)}`;
   }
 
-  // Formato en vivo mientras escribes
   ["#telefono1", "#telefono2"].forEach(sel => {
     const input = document.querySelector(sel);
     if (!input) return;
@@ -182,7 +181,11 @@
     });
   });
 
-  // ====== FECHAS (MX) ======
+  // ========= FECHAS =========
+  function getRawFecha(r) {
+    return r?.fecha_ingreso || r?.created_at || r?.fecha || r?.fechaIngreso || "";
+  }
+
   function todayKeyMX() {
     return new Date().toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" }); // YYYY-MM-DD
   }
@@ -190,16 +193,17 @@
   function dateKeyMX(raw) {
     if (!raw) return "";
     const d = new Date(raw);
-    if (isNaN(d.getTime())) {
-      const m = String(raw).match(/^(\d{4}-\d{2}-\d{2})/);
-      return m ? m[1] : "";
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
     }
-    return d.toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
+    const m = String(raw).match(/^(\d{4}-\d{2}-\d{2})/);
+    return m ? m[1] : "";
   }
 
   function getFechaTexto(r) {
-    const raw = r.fecha_ingreso || r.created_at || r.fecha || r.fechaIngreso;
+    const raw = getRawFecha(r);
     if (!raw) return "-";
+
     const d = new Date(raw);
     if (!isNaN(d.getTime())) {
       const parts = new Intl.DateTimeFormat("es-MX", {
@@ -213,15 +217,41 @@
       const da = parts.find(p => p.type === "day")?.value;
       return `${da}/${mo}/${y}`;
     }
+
     const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (m) {
       const [, y, mo, da] = m;
       return `${da}/${mo}/${y}`;
     }
+
     return String(raw).slice(0, 16);
   }
 
-  // ====== SPLIT HOY vs PENDIENTES (regla final) ======
+  // Timestamp para ordenar: primero el que llegó primero (asc)
+  function getTS(r) {
+    const raw = getRawFecha(r);
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) return d.getTime();
+
+    // fallback YYYY-MM-DD
+    const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) {
+      const y = Number(m[1]), mo = Number(m[2]) - 1, da = Number(m[3]);
+      return Date.UTC(y, mo, da);
+    }
+    return 0;
+  }
+
+  function sortAsc(rows) {
+    return (rows || []).slice().sort((a, b) => {
+      const ta = getTS(a), tb = getTS(b);
+      if (ta !== tb) return ta - tb; // asc (primero el más viejo)
+      const ia = Number(a?.id_orden || 0), ib = Number(b?.id_orden || 0);
+      return ia - ib; // desempate
+    });
+  }
+
+  // ====== SPLIT HOY vs PENDIENTES (CORREGIDO) ======
   function splitHoyPend(rows) {
     const hoy = [];
     const pend = [];
@@ -229,22 +259,25 @@
 
     (rows || []).forEach(r => {
       const est = mapEstatus(r.id_estatus);
-      const k = dateKeyMX(r.fecha_ingreso);
+      const key = dateKeyMX(getRawFecha(r));
 
-      // HOY: todo lo ingresado HOY (cualquier estado, incluso entregado)
-      if (k === hoyKey) {
+      // HOY: todo lo ingresado hoy, cualquier estado
+      if (key === hoyKey) {
         hoy.push(r);
         return;
       }
 
       // NO es hoy:
-      // Pendientes: estado en ESTADOS_PEND y NO entregado
+      // Pendientes: estados permitidos y NO entregado
       if (ESTADOS_PEND.includes(est) && est !== "Entregado") {
         pend.push(r);
       }
     });
 
-    return { hoy, pend };
+    return {
+      hoy: sortAsc(hoy),
+      pend: sortAsc(pend),
+    };
   }
 
   // ====== Construye fila+detalle desde template ======
@@ -264,24 +297,22 @@
       estadoSlot.appendChild(createBadgeElement(estTexto, r.id_estatus || estTexto));
     }
 
-    // Set data-id
+    // data-id
     frag.querySelectorAll("[data-id='__ID__']").forEach(n => n.setAttribute("data-id", r.id_orden));
     const panel = frag.querySelector(".details");
     panel?.setAttribute("data-id", r.id_orden);
 
     // Detalles
-    fill(frag.querySelector(".slot-det-cliente"),  r.cliente || "");
-
-    // Teléfonos formateados (en "Más info")
+    fill(frag.querySelector(".slot-det-cliente"), r.cliente || "");
     fill(frag.querySelector(".slot-det-tel1"), r.telefono1 ? formatTelefono(r.telefono1) : "");
     fill(frag.querySelector(".slot-det-tel2"), r.telefono2 ? formatTelefono(r.telefono2) : "-");
 
-    fill(frag.querySelector(".slot-det-marca"),    r.marca || "");
-    fill(frag.querySelector(".slot-det-modelo"),   r.modelo || "");
-    fill(frag.querySelector(".slot-det-anio"),     r.anio ?? "");
-    fill(frag.querySelector(".slot-det-color"),    r.color || "");
-    fill(frag.querySelector(".slot-det-falla"),    r.falla || "");
-    fill(frag.querySelector(".slot-det-fecha"),    getFechaTexto(r));
+    fill(frag.querySelector(".slot-det-marca"), r.marca || "");
+    fill(frag.querySelector(".slot-det-modelo"), r.modelo || "");
+    fill(frag.querySelector(".slot-det-anio"), r.anio ?? "");
+    fill(frag.querySelector(".slot-det-color"), r.color || "");
+    fill(frag.querySelector(".slot-det-falla"), r.falla || "");
+    fill(frag.querySelector(".slot-det-fecha"), getFechaTexto(r));
 
     // VIN
     const vinValor = (r.VIN ?? r.vin ?? r.Vin ?? "").toString();
@@ -301,7 +332,7 @@
       mecInput.dataset.id = r.id_orden;
     }
 
-    // Cobro (admin)
+    // Cobro
     const cobroValor = (r.cobro ?? "").toString();
     const cobroInput = frag.querySelector(".cobro-input");
     if (cobroInput) {
@@ -328,28 +359,18 @@
     return frag;
   }
 
-  // ====== Render HOY ======
   function renderHoy(rows) {
     if (!tbodyHoy) return;
     tbodyHoy.innerHTML = "";
     if (!rows?.length) return;
-
-    rows.forEach((r, i) => {
-      tbodyHoy.appendChild(buildFila(r, i + 1));
-    });
+    rows.forEach((r, i) => tbodyHoy.appendChild(buildFila(r, i + 1)));
   }
 
-  // ====== Render PENDIENTES ======
   function renderPendientes(rows) {
     if (!tbodyPendientes) return;
     tbodyPendientes.innerHTML = "";
     if (!rows?.length) return;
-
-    rows.forEach((r, i) => {
-      const frag = buildFila(r, i + 1);
-      frag.querySelectorAll("tr").forEach(tr => tr.classList.add("pendiente"));
-      tbodyPendientes.appendChild(frag);
-    });
+    rows.forEach((r, i) => tbodyPendientes.appendChild(buildFila(r, i + 1)));
   }
 
   async function cargarRecepcion() {
@@ -433,18 +454,16 @@
     }
   });
 
-  // ✅ LIMPIAR con confirmación (más seguro)
+  // LIMPIAR con confirmación
   btnClear?.addEventListener("click", () => {
     if (!form) return;
-    const seguro = confirm(
-      "⚠️ ¿Seguro que deseas limpiar el formulario?\n\nLos datos capturados se perderán."
-    );
+    const seguro = confirm("⚠️ ¿Seguro que deseas limpiar el formulario?\n\nLos datos capturados se perderán.");
     if (!seguro) return;
     form.reset();
     $("#clienteNombre")?.focus();
   });
 
-  // ====== Click handler reutilizable para HOY y PENDIENTES ======
+  // ====== Click handler para HOY y PENDIENTES ======
   async function handleTableClick(e) {
     const btnToggle  = e.target.closest(".toggle-detalle");
     const btnGuardar = e.target.closest(".guardar-cambios");
@@ -590,7 +609,6 @@
 
         await API.patch(id, payload);
 
-        // SUBIR FOTOS
         const S = CAM.get(id) || { captures: [] };
         const bag = [];
         if (fotosInput?.files?.length) bag.push(...fotosInput.files);
@@ -602,21 +620,12 @@
           await cargarFotos(id);
         }
 
-        // Actualiza DOM local (para que no se vea "en blanco" aunque no recargue)
-        const vinSpan = $(`.details[data-id="${id}"] .slot-det-vin`);
-        if (vinSpan) vinSpan.textContent = payload.vin ? payload.vin : "-";
-
-        const mecSpan = $(`.details[data-id="${id}"] .slot-det-mecanico`);
-        if (mecSpan) mecSpan.textContent = payload.mecanico ? payload.mecanico : "-";
-
         okSpan?.classList.remove("d-none");
         errSpan?.classList.add("d-none");
         setTimeout(() => okSpan?.classList.add("d-none"), 1500);
 
-        // Si cambiaste estado, puede moverse entre HOY/PENDIENTES => recarga
-        if (payload.estado) {
-          await cargarRecepcion();
-        }
+        // Estado puede mover entre HOY/PENDIENTES, así que recargamos
+        await cargarRecepcion();
       } catch (err) {
         console.error("Error guardando:", err);
         okSpan?.classList.add("d-none");
@@ -630,12 +639,8 @@
       const fotoId  = btnDelFoto.dataset.fotoId;
       const grid    = btnDelFoto.closest(".fotos-grid");
       const ordenId = grid?.dataset.id;
-      try {
-        await API.fotos.remove(fotoId);
-        await cargarFotos(ordenId);
-      } catch (err) {
-        console.error("No se pudo borrar:", err);
-      }
+      try { await API.fotos.remove(fotoId); await cargarFotos(ordenId); }
+      catch (err) { console.error("No se pudo borrar:", err); }
       return;
     }
 
@@ -655,11 +660,9 @@
     }
   }
 
-  // Click en HOY y PENDIENTES
   tbodyHoy?.addEventListener("click", handleTableClick);
   tbodyPendientes?.addEventListener("click", handleTableClick);
 
-  // Cambio de estado (actualiza badge visual inmediato)
   function handleChange(e) {
     const sel = e.target.closest(".estado-select");
     if (!sel) return;
@@ -673,7 +676,7 @@
   tbodyHoy?.addEventListener("change", handleChange);
   tbodyPendientes?.addEventListener("change", handleChange);
 
-  // ====== Pantalla completa (HOY y PENDIENTES) ======
+  // ====== Fullscreen ======
   function entrarPantallaCompleta(card, btn) {
     if (!card) return;
     card.dataset.full = "1";
