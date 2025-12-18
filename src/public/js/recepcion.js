@@ -33,7 +33,7 @@
     "Entregado",
   ];
 
-  // Pendientes incluye Recibido (si se quedó para el siguiente día)
+  // Pendientes incluye Recibido si NO es hoy
   const ESTADOS_PEND = [
     "Recibido",
     "Diagnóstico",
@@ -185,29 +185,45 @@
     });
   });
 
-  // ========= FECHAS (CORREGIDO PARA NO MANDAR "HOY" A PENDIENTES) =========
+  // ========= FECHAS (ARREGLO DEFINITIVO) =========
   function getRawFecha(r) {
     return r?.fecha_ingreso || r?.created_at || r?.fecha || r?.fechaIngreso || "";
   }
 
-  // "HOY" en tu zona (Matamoros)
+  function pad2(n) { return String(n).padStart(2, "0"); }
+
+  // HOY usando fecha LOCAL del navegador (sin timeZone, sin UTC)
   function todayKeyLocal() {
-    return new Date().toLocaleDateString("en-CA", { timeZone: "America/Matamoros" }); // YYYY-MM-DD
+    const d = new Date();
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   }
 
-  // Extrae YYYY-MM-DD DIRECTO del string (sin Date) para evitar desfases por UTC/Z
+  // Soporta:
+  // - 2025-12-04T...
+  // - 2025-12-04 12:34:56
+  // - 2025/12/04 ...
+  // - 04/12/2025
+  // - 04-12-2025
   function dateKeyFromRaw(raw) {
     if (!raw) return "";
 
     const s = String(raw);
 
-    // Caso típico: "2025-12-04T12:34:56.000Z" o "2025-12-04 12:34:56"
-    const m1 = s.match(/(\d{4}-\d{2}-\d{2})/);
-    if (m1) return m1[1];
+    // YYYY-MM-DD
+    let m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[1]}-${m[2]}-${m[3]}`;
 
-    // Caso: "04/12/2025"
-    const m2 = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-    if (m2) return `${m2[3]}-${m2[2]}-${m2[1]}`;
+    // YYYY/MM/DD
+    m = s.match(/(\d{4})\/(\d{2})\/(\d{2})/);
+    if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+
+    // DD/MM/YYYY
+    m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+
+    // DD-MM-YYYY
+    m = s.match(/(\d{2})-(\d{2})-(\d{4})/);
+    if (m) return `${m[3]}-${m[2]}-${m[1]}`;
 
     return "";
   }
@@ -241,7 +257,7 @@
     });
   }
 
-  // ====== SPLIT HOY vs PENDIENTES (BLINDADO) ======
+  // ====== SPLIT HOY vs PENDIENTES ======
   function splitHoyPend(rows) {
     const hoy = [];
     const pend = [];
@@ -251,22 +267,19 @@
       const est = mapEstatus(r.id_estatus);
       const key = dateKeyFromRaw(getRawFecha(r));
 
-      // Si por alguna razón viene sin fecha, lo tratamos como HOY (más seguro)
+      // Si NO podemos leer la fecha, lo metemos en HOY (para NO mandarlo a pendientes por error)
       if (!key || key === hoyKey) {
         hoy.push(r);
         return;
       }
 
-      // NO es hoy: Pendientes solo si estado está en la lista y NO es Entregado
+      // NO es hoy: Pendientes solo si no está entregado
       if (ESTADOS_PEND.includes(est) && est !== "Entregado") {
         pend.push(r);
       }
     });
 
-    return {
-      hoy: sortAsc(hoy),
-      pend: sortAsc(pend),
-    };
+    return { hoy: sortAsc(hoy), pend: sortAsc(pend) };
   }
 
   // ====== Construye fila+detalle desde template ======
@@ -357,57 +370,7 @@
     }
   }
 
-  async function cargarFotos(ordenId) {
-    const grid = $(`.fotos-grid[data-id="${ordenId}"]`);
-    if (!grid) return;
-    grid.innerHTML = "<div class='small'>Cargando fotos…</div>";
-    try {
-      const fotos = await API.fotos.list(ordenId);
-      if (!fotos.length) {
-        grid.innerHTML = "<div class='small'>Sin fotos aún.</div>";
-        return;
-      }
-      const frag = document.createDocumentFragment();
-      fotos.forEach(f => {
-        const card = document.createElement("div");
-        card.className = "foto-item";
-        card.style.display = "inline-block";
-        card.style.margin = "6px";
-        card.style.position = "relative";
-
-        const img = document.createElement("img");
-        const ruta = String(f.ruta_archivo || "");
-        const src = /^https?:\/\//i.test(ruta) ? ruta : "/" + ruta.replace(/^\/+/, "");
-        img.src = src;
-        img.alt = f.nombre_original || "foto";
-        img.style.width = "120px";
-        img.style.height = "90px";
-        img.style.objectFit = "cover";
-        img.style.borderRadius = "8px";
-        img.loading = "lazy";
-
-        const del = document.createElement("button");
-        del.className = "btn btn-danger btn-xs del-foto";
-        del.textContent = "✕";
-        del.dataset.fotoId = f.id;
-        del.style.position = "absolute";
-        del.style.top = "2px";
-        del.style.right = "2px";
-        del.style.padding = "2px 6px";
-
-        card.appendChild(img);
-        card.appendChild(del);
-        frag.appendChild(card);
-      });
-      grid.innerHTML = "";
-      grid.appendChild(frag);
-    } catch (e) {
-      console.error("No se pudieron cargar fotos:", e);
-      grid.innerHTML = "<div class='small text-danger'>Error al cargar fotos.</div>";
-    }
-  }
-
-  // ====== FORM SUBMIT (mandamos teléfono SOLO dígitos) ======
+  // ====== FORM SUBMIT ======
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!form.reportValidity()) return;
@@ -441,92 +404,7 @@
     $("#clienteNombre")?.focus();
   });
 
-  async function handleTableClick(e) {
-    const btnToggle  = e.target.closest(".toggle-detalle");
-    const btnGuardar = e.target.closest(".guardar-cambios");
-    const btnBorrar  = e.target.closest(".borrar");
-
-    if (btnToggle) {
-      const id = btnToggle.dataset.id;
-      const trPrincipal = btnToggle.closest("tr");
-      const trDetalle   = trPrincipal?.nextElementSibling;
-      const panel = trDetalle?.querySelector(".details");
-      if (!panel || !trDetalle) return;
-
-      const fallaTxt  = trPrincipal.querySelector(".slot-falla")?.textContent || "";
-      const fallaSpan = panel.querySelector(".slot-det-falla");
-      if (fallaSpan) fallaSpan.textContent = fallaTxt;
-
-      const hidden = trDetalle.hasAttribute("hidden") || trDetalle.style.display === "none";
-      if (hidden) {
-        trDetalle.removeAttribute("hidden");
-        trDetalle.style.display = "table-row";
-        panel.removeAttribute("hidden");
-        btnToggle.textContent = "Menos info";
-        if (!CAM.has(id)) CAM.set(id, { stream: null, captures: [] });
-        await cargarFotos(id);
-      } else {
-        trDetalle.setAttribute("hidden", "");
-        trDetalle.style.display = "none";
-        panel.setAttribute("hidden", "");
-        btnToggle.textContent = "Más info";
-      }
-      return;
-    }
-
-    if (btnGuardar) {
-      const id = btnGuardar.dataset.id;
-      const panel = $(`.details[data-id="${id}"]`);
-      const sel = panel?.querySelector(".estado-select");
-      const vinEl = panel?.querySelector(".vin-input");
-      const cobroEl = panel?.querySelector(".cobro-input");
-      const mecanicoEl = panel?.querySelector(".mecanico-input");
-
-      const okSpan  = panel?.querySelector(`.save-ok`);
-      const errSpan = panel?.querySelector(`.save-err`);
-
-      try {
-        const payload = {};
-        if (sel?.value) payload.estado = sel.value;
-        if (vinEl) payload.vin = (vinEl.value || "").trim();
-        if (cobroEl) payload.cobro = (cobroEl.value || "").trim();
-        if (mecanicoEl) payload.mecanico = (mecanicoEl.value || "").trim();
-
-        await API.patch(id, payload);
-
-        okSpan?.classList.remove("d-none");
-        errSpan?.classList.add("d-none");
-        setTimeout(() => okSpan?.classList.add("d-none"), 1500);
-
-        await cargarRecepcion();
-      } catch (err) {
-        console.error("Error guardando:", err);
-        okSpan?.classList.add("d-none");
-        errSpan?.classList.remove("d-none");
-        setTimeout(() => errSpan?.classList.add("d-none"), 2000);
-      }
-      return;
-    }
-
-    if (btnBorrar) {
-      const id = btnBorrar.dataset.id;
-      if (!id) return;
-      if (!confirm("¿Seguro borrar esta orden?")) return;
-      try {
-        await API.delete(id);
-        await cargarRecepcion();
-        setMsg("Registro borrado.");
-      } catch (err) {
-        console.error(err);
-        setMsg(err.message || "No se pudo borrar", false);
-      }
-      return;
-    }
-  }
-
-  tbodyHoy?.addEventListener("click", handleTableClick);
-  tbodyPendientes?.addEventListener("click", handleTableClick);
-
+  // ====== Pantalla completa ======
   function entrarPantallaCompleta(card, btn) {
     if (!card) return;
     card.dataset.full = "1";
