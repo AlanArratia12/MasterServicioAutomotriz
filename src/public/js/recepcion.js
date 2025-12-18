@@ -177,7 +177,6 @@
     return `${nums.slice(0,3)}-${nums.slice(3,6)}-${nums.slice(6)}`;
   }
 
-  // Formateo visual mientras escribe (pero al guardar mandamos SOLO números)
   ["#telefono1", "#telefono2"].forEach(sel => {
     const input = document.querySelector(sel);
     if (!input) return;
@@ -186,59 +185,51 @@
     });
   });
 
-  // ========= FECHAS =========
+  // ========= FECHAS (CORREGIDO PARA NO MANDAR "HOY" A PENDIENTES) =========
   function getRawFecha(r) {
     return r?.fecha_ingreso || r?.created_at || r?.fecha || r?.fechaIngreso || "";
   }
 
-  function todayKeyMX() {
-    return new Date().toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" }); // YYYY-MM-DD
+  // "HOY" en tu zona (Matamoros)
+  function todayKeyLocal() {
+    return new Date().toLocaleDateString("en-CA", { timeZone: "America/Matamoros" }); // YYYY-MM-DD
   }
 
-  function dateKeyMX(raw) {
+  // Extrae YYYY-MM-DD DIRECTO del string (sin Date) para evitar desfases por UTC/Z
+  function dateKeyFromRaw(raw) {
     if (!raw) return "";
-    const d = new Date(raw);
-    if (!isNaN(d.getTime())) {
-      return d.toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
-    }
-    const m = String(raw).match(/^(\d{4}-\d{2}-\d{2})/);
-    return m ? m[1] : "";
+
+    const s = String(raw);
+
+    // Caso típico: "2025-12-04T12:34:56.000Z" o "2025-12-04 12:34:56"
+    const m1 = s.match(/(\d{4}-\d{2}-\d{2})/);
+    if (m1) return m1[1];
+
+    // Caso: "04/12/2025"
+    const m2 = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (m2) return `${m2[3]}-${m2[2]}-${m2[1]}`;
+
+    return "";
   }
 
   function getFechaTexto(r) {
     const raw = getRawFecha(r);
-    if (!raw) return "-";
-
-    const d = new Date(raw);
-    if (!isNaN(d.getTime())) {
-      const parts = new Intl.DateTimeFormat("es-MX", {
-        timeZone: "America/Mexico_City",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).formatToParts(d);
-      const y  = parts.find(p => p.type === "year")?.value;
-      const mo = parts.find(p => p.type === "month")?.value;
-      const da = parts.find(p => p.type === "day")?.value;
+    const key = dateKeyFromRaw(raw);
+    if (key) {
+      const [y, mo, da] = key.split("-");
       return `${da}/${mo}/${y}`;
     }
-
-    const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) {
-      const [, y, mo, da] = m;
-      return `${da}/${mo}/${y}`;
-    }
-
-    return String(raw).slice(0, 16);
+    return raw ? String(raw).slice(0, 16) : "-";
   }
 
   function getTS(r) {
-    const raw = getRawFecha(r);
-    const d = new Date(raw);
-    if (!isNaN(d.getTime())) return d.getTime();
-    const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-    return 0;
+    const key = dateKeyFromRaw(getRawFecha(r));
+    if (key) {
+      const [y, mo, da] = key.split("-").map(Number);
+      return Date.UTC(y, mo - 1, da);
+    }
+    const id = Number(r?.id_orden || 0);
+    return id ? id : 0;
   }
 
   function sortAsc(rows) {
@@ -250,21 +241,23 @@
     });
   }
 
-  // ====== SPLIT HOY vs PENDIENTES ======
+  // ====== SPLIT HOY vs PENDIENTES (BLINDADO) ======
   function splitHoyPend(rows) {
     const hoy = [];
     const pend = [];
-    const hoyKey = todayKeyMX();
+    const hoyKey = todayKeyLocal();
 
     (rows || []).forEach(r => {
       const est = mapEstatus(r.id_estatus);
-      const key = dateKeyMX(getRawFecha(r));
+      const key = dateKeyFromRaw(getRawFecha(r));
 
-      if (key === hoyKey) {
+      // Si por alguna razón viene sin fecha, lo tratamos como HOY (más seguro)
+      if (!key || key === hoyKey) {
         hoy.push(r);
         return;
       }
 
+      // NO es hoy: Pendientes solo si estado está en la lista y NO es Entregado
       if (ESTADOS_PEND.includes(est) && est !== "Entregado") {
         pend.push(r);
       }
@@ -276,6 +269,7 @@
     };
   }
 
+  // ====== Construye fila+detalle desde template ======
   function buildFila(r, idx) {
     const frag = tpl.content.cloneNode(true);
     const estTexto = mapEstatus(r.id_estatus);
@@ -309,25 +303,16 @@
     const vinValor = (r.VIN ?? r.vin ?? r.Vin ?? "").toString();
     fill(frag.querySelector(".slot-det-vin"), vinValor || "-");
     const vinInput = frag.querySelector(".vin-input");
-    if (vinInput) {
-      vinInput.value = vinValor || "";
-      vinInput.dataset.id = r.id_orden;
-    }
+    if (vinInput) { vinInput.value = vinValor || ""; vinInput.dataset.id = r.id_orden; }
 
     const mecValor = (r.mecanico ?? r.mecanico_reparo ?? "").toString();
     fill(frag.querySelector(".slot-det-mecanico"), mecValor || "-");
     const mecInput = frag.querySelector(".mecanico-input");
-    if (mecInput) {
-      mecInput.value = mecValor || "";
-      mecInput.dataset.id = r.id_orden;
-    }
+    if (mecInput) { mecInput.value = mecValor || ""; mecInput.dataset.id = r.id_orden; }
 
     const cobroValor = (r.cobro ?? "").toString();
     const cobroInput = frag.querySelector(".cobro-input");
-    if (cobroInput) {
-      cobroInput.value = cobroValor || "";
-      cobroInput.dataset.id = r.id_orden;
-    }
+    if (cobroInput) { cobroInput.value = cobroValor || ""; cobroInput.dataset.id = r.id_orden; }
 
     const detEstadoSlot = frag.querySelector(".details .slot-estado");
     if (detEstadoSlot) {
@@ -422,7 +407,7 @@
     }
   }
 
-  // ====== FORM SUBMIT (AQUÍ ESTÁ LA CLAVE: mandamos teléfono SOLO dígitos) ======
+  // ====== FORM SUBMIT (mandamos teléfono SOLO dígitos) ======
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!form.reportValidity()) return;
@@ -430,7 +415,6 @@
     try {
       const fd = new FormData(form);
 
-      // ✅ Importantísimo: al backend mandamos solo números
       const tel1Input = $("#telefono1");
       const tel2Input = $("#telefono2");
       if (tel1Input) fd.set("telefono1", soloDigitos(tel1Input.value));
@@ -460,11 +444,7 @@
   async function handleTableClick(e) {
     const btnToggle  = e.target.closest(".toggle-detalle");
     const btnGuardar = e.target.closest(".guardar-cambios");
-    const btnDelFoto = e.target.closest(".del-foto");
     const btnBorrar  = e.target.closest(".borrar");
-    const btnCamOn   = e.target.closest(".cam-abrir");
-    const btnShot    = e.target.closest(".cam-foto");
-    const btnCancel  = e.target.closest(".cam-cancel");
 
     if (btnToggle) {
       const id = btnToggle.dataset.id;
@@ -490,16 +470,6 @@
         trDetalle.style.display = "none";
         panel.setAttribute("hidden", "");
         btnToggle.textContent = "Más info";
-        const S = CAM.get(id);
-        if (S?.stream) { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; }
-        const v = $(`video.cam-preview[data-id="${id}"]`);
-        if (v) { v.srcObject = null; v.style.display = "none"; }
-        const shotBtn = $(`.cam-foto[data-id="${id}"]`);
-        if (shotBtn) shotBtn.disabled = true;
-        const cancelBtn = $(`.cam-cancel[data-id="${id}"]`);
-        if (cancelBtn) cancelBtn.disabled = true;
-        const camOnBtn = $(`.cam-abrir[data-id="${id}"]`);
-        if (camOnBtn) camOnBtn.disabled = false;
       }
       return;
     }
@@ -512,7 +482,6 @@
       const cobroEl = panel?.querySelector(".cobro-input");
       const mecanicoEl = panel?.querySelector(".mecanico-input");
 
-      const fotosInput = panel?.querySelector(`.fotos-input[data-id="${id}"]`);
       const okSpan  = panel?.querySelector(`.save-ok`);
       const errSpan = panel?.querySelector(`.save-err`);
 
@@ -524,17 +493,6 @@
         if (mecanicoEl) payload.mecanico = (mecanicoEl.value || "").trim();
 
         await API.patch(id, payload);
-
-        const S = CAM.get(id) || { captures: [] };
-        const bag = [];
-        if (fotosInput?.files?.length) bag.push(...fotosInput.files);
-        if (S.captures?.length) bag.push(...S.captures);
-        if (bag.length) {
-          await API.fotos.upload(id, bag);
-          if (fotosInput) fotosInput.value = "";
-          S.captures = []; CAM.set(id, S);
-          await cargarFotos(id);
-        }
 
         okSpan?.classList.remove("d-none");
         errSpan?.classList.add("d-none");
@@ -568,19 +526,6 @@
 
   tbodyHoy?.addEventListener("click", handleTableClick);
   tbodyPendientes?.addEventListener("click", handleTableClick);
-
-  function handleChange(e) {
-    const sel = e.target.closest(".estado-select");
-    if (!sel) return;
-    const id = sel.dataset.id;
-    const detEstadoSlot = $(`.details[data-id="${id}"] .slot-estado`);
-    if (detEstadoSlot) {
-      detEstadoSlot.textContent = "";
-      detEstadoSlot.appendChild(createBadgeElement(sel.value, sel.value));
-    }
-  }
-  tbodyHoy?.addEventListener("change", handleChange);
-  tbodyPendientes?.addEventListener("change", handleChange);
 
   function entrarPantallaCompleta(card, btn) {
     if (!card) return;
