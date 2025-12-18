@@ -22,6 +22,7 @@
   // Tabla PENDIENTES
   const tbodyPendientes = $("#tbody-pendientes");
 
+  // Cámara por orden
   const CAM = new Map();
 
   const ESTADOS = [
@@ -33,7 +34,7 @@
     "Entregado",
   ];
 
-  // Pendientes incluye Recibido si NO es hoy
+  // Pendientes incluye Recibido, PERO SOLO si NO es hoy
   const ESTADOS_PEND = [
     "Recibido",
     "Diagnóstico",
@@ -78,7 +79,10 @@
         for (const f of filesOrBlobs) {
           fd.append("fotos", f, f.name || `foto-${Date.now()}.jpg`);
         }
-        const res = await fetch(`/api/ordenes/${ordenId}/fotos`, { method: "POST", body: fd });
+        const res = await fetch(`/api/ordenes/${ordenId}/fotos`, {
+          method: "POST",
+          body: fd,
+        });
         if (!res.ok) throw await parseError(res);
         return res.json();
       },
@@ -106,6 +110,8 @@
     if (text) setTimeout(() => { msg.textContent = ""; }, 3000);
   }
 
+  function fill(el, text) { if (el) el.textContent = text ?? ""; }
+
   function autoText(r) {
     const anio  = (r.anio ?? "").toString();
     const color = r.color || "";
@@ -115,14 +121,7 @@
   function mapEstatus(id) {
     const num = Number(id);
     if (!isNaN(num) && num > 0) {
-      const m = {
-        1: "Recibido",
-        2: "Diagnóstico",
-        3: "En espera de refacciones",
-        4: "Reparación",
-        5: "Listo",
-        6: "Entregado",
-      };
+      const m = { 1:"Recibido", 2:"Diagnóstico", 3:"En espera de refacciones", 4:"Reparación", 5:"Listo", 6:"Entregado" };
       return m[num] || "Recibido";
     }
     return id || "Recibido";
@@ -135,7 +134,7 @@
 
     if ((!isNaN(num) && num === 1) || text.includes("recibido")) {
       s = { bg: "#dbeafe", fg: "#1e3a8a", br: "#bfdbfe" };
-    } else if ((!isNaN(num) && [2, 3, 4].includes(num)) || text.match(/diagn|espera|repara/)) {
+    } else if ((!isNaN(num) && [2,3,4].includes(num)) || text.match(/diagn|espera|repara/)) {
       s = { bg: "#fef3c7", fg: "#78350f", br: "#fde68a" };
     } else if ((!isNaN(num) && num === 5) || text.includes("listo")) {
       s = { bg: "#dcfce7", fg: "#14532d", br: "#bbf7d0" };
@@ -160,10 +159,9 @@
     badge.style.backgroundColor = estilo.bg;
     badge.style.color = estilo.fg;
     badge.style.border = "1px solid " + estilo.br;
+
     return badge;
   }
-
-  function fill(el, text) { if (el) el.textContent = text ?? ""; }
 
   // ========= TELÉFONO =========
   function soloDigitos(v) {
@@ -185,28 +183,21 @@
     });
   });
 
-  // ========= FECHAS (ARREGLO DEFINITIVO) =========
+  // ========= FECHAS (HOY vs PENDIENTES) =========
   function getRawFecha(r) {
     return r?.fecha_ingreso || r?.created_at || r?.fecha || r?.fechaIngreso || "";
   }
 
   function pad2(n) { return String(n).padStart(2, "0"); }
 
-  // HOY usando fecha LOCAL del navegador (sin timeZone, sin UTC)
   function todayKeyLocal() {
     const d = new Date();
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   }
 
-  // Soporta:
-  // - 2025-12-04T...
-  // - 2025-12-04 12:34:56
-  // - 2025/12/04 ...
-  // - 04/12/2025
-  // - 04-12-2025
+  // Soporta varios formatos
   function dateKeyFromRaw(raw) {
     if (!raw) return "";
-
     const s = String(raw);
 
     // YYYY-MM-DD
@@ -245,7 +236,7 @@
       return Date.UTC(y, mo - 1, da);
     }
     const id = Number(r?.id_orden || 0);
-    return id ? id : 0;
+    return id || 0;
   }
 
   function sortAsc(rows) {
@@ -257,7 +248,6 @@
     });
   }
 
-  // ====== SPLIT HOY vs PENDIENTES ======
   function splitHoyPend(rows) {
     const hoy = [];
     const pend = [];
@@ -267,13 +257,13 @@
       const est = mapEstatus(r.id_estatus);
       const key = dateKeyFromRaw(getRawFecha(r));
 
-      // Si NO podemos leer la fecha, lo metemos en HOY (para NO mandarlo a pendientes por error)
+      // Si no podemos leer fecha, lo tratamos como HOY para no mandarlo a pendientes por error
       if (!key || key === hoyKey) {
         hoy.push(r);
         return;
       }
 
-      // NO es hoy: Pendientes solo si no está entregado
+      // NO es hoy: Pendientes solo si estado está en la lista y NO es Entregado
       if (ESTADOS_PEND.includes(est) && est !== "Entregado") {
         pend.push(r);
       }
@@ -282,7 +272,7 @@
     return { hoy: sortAsc(hoy), pend: sortAsc(pend) };
   }
 
-  // ====== Construye fila+detalle desde template ======
+  // ========= RENDER =========
   function buildFila(r, idx) {
     const frag = tpl.content.cloneNode(true);
     const estTexto = mapEstatus(r.id_estatus);
@@ -313,12 +303,12 @@
     fill(frag.querySelector(".slot-det-falla"), r.falla || "");
     fill(frag.querySelector(".slot-det-fecha"), getFechaTexto(r));
 
-    const vinValor = (r.VIN ?? r.vin ?? r.Vin ?? "").toString();
+    const vinValor = (r.VIN ?? r.vin ?? "").toString();
     fill(frag.querySelector(".slot-det-vin"), vinValor || "-");
     const vinInput = frag.querySelector(".vin-input");
     if (vinInput) { vinInput.value = vinValor || ""; vinInput.dataset.id = r.id_orden; }
 
-    const mecValor = (r.mecanico ?? r.mecanico_reparo ?? "").toString();
+    const mecValor = (r.mecanico ?? "").toString();
     fill(frag.querySelector(".slot-det-mecanico"), mecValor || "-");
     const mecInput = frag.querySelector(".mecanico-input");
     if (mecInput) { mecInput.value = mecValor || ""; mecInput.dataset.id = r.id_orden; }
@@ -370,7 +360,60 @@
     }
   }
 
-  // ====== FORM SUBMIT ======
+  // ========= FOTOS =========
+  async function cargarFotos(ordenId) {
+    const grid = $(`.fotos-grid[data-id="${ordenId}"]`);
+    if (!grid) return;
+    grid.innerHTML = "<div class='small'>Cargando fotos…</div>";
+    try {
+      const fotos = await API.fotos.list(ordenId);
+      if (!fotos.length) {
+        grid.innerHTML = "<div class='small'>Sin fotos aún.</div>";
+        return;
+      }
+
+      const frag = document.createDocumentFragment();
+      fotos.forEach(f => {
+        const card = document.createElement("div");
+        card.className = "foto-item";
+        card.style.display = "inline-block";
+        card.style.margin = "6px";
+        card.style.position = "relative";
+
+        const img = document.createElement("img");
+        const ruta = String(f.ruta_archivo || "");
+        const src = /^https?:\/\//i.test(ruta) ? ruta : "/" + ruta.replace(/^\/+/, "");
+        img.src = src;
+        img.alt = f.nombre_original || "foto";
+        img.style.width = "120px";
+        img.style.height = "90px";
+        img.style.objectFit = "cover";
+        img.style.borderRadius = "8px";
+        img.loading = "lazy";
+
+        const del = document.createElement("button");
+        del.className = "btn btn-danger btn-xs del-foto";
+        del.textContent = "✕";
+        del.dataset.fotoId = f.id;
+        del.style.position = "absolute";
+        del.style.top = "2px";
+        del.style.right = "2px";
+        del.style.padding = "2px 6px";
+
+        card.appendChild(img);
+        card.appendChild(del);
+        frag.appendChild(card);
+      });
+
+      grid.innerHTML = "";
+      grid.appendChild(frag);
+    } catch (e) {
+      console.error("No se pudieron cargar fotos:", e);
+      grid.innerHTML = "<div class='small text-danger'>Error al cargar fotos.</div>";
+    }
+  }
+
+  // ========= FORM =========
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!form.reportValidity()) return;
@@ -378,6 +421,7 @@
     try {
       const fd = new FormData(form);
 
+      // Mandar SOLO dígitos al backend
       const tel1Input = $("#telefono1");
       const tel2Input = $("#telefono2");
       if (tel1Input) fd.set("telefono1", soloDigitos(tel1Input.value));
@@ -395,7 +439,7 @@
     }
   });
 
-  // LIMPIAR con confirmación
+  // Limpiar con confirmación
   btnClear?.addEventListener("click", () => {
     if (!form) return;
     const seguro = confirm("⚠️ ¿Seguro que deseas limpiar el formulario?\n\nLos datos capturados se perderán.");
@@ -404,7 +448,255 @@
     $("#clienteNombre")?.focus();
   });
 
-  // ====== Pantalla completa ======
+  // ========= INTERACCIONES EN TABLAS (HOY y PENDIENTES) =========
+  async function handleTableClick(e) {
+    const btnToggle  = e.target.closest(".toggle-detalle");
+    const btnGuardar = e.target.closest(".guardar-cambios");
+    const btnDelFoto = e.target.closest(".del-foto");
+    const btnBorrar  = e.target.closest(".borrar");
+
+    const btnCamOn   = e.target.closest(".cam-abrir");
+    const btnShot    = e.target.closest(".cam-foto");
+    const btnCancel  = e.target.closest(".cam-cancel");
+
+    // ====== MÁS INFO ======
+    if (btnToggle) {
+      const id = btnToggle.dataset.id;
+      const trPrincipal = btnToggle.closest("tr");
+      const trDetalle   = trPrincipal?.nextElementSibling;
+      const panel = trDetalle?.querySelector(".details");
+      if (!panel || !trDetalle) return;
+
+      // sincronizar falla por si acaso
+      const fallaTxt  = trPrincipal.querySelector(".slot-falla")?.textContent || "";
+      const fallaSpan = panel.querySelector(".slot-det-falla");
+      if (fallaSpan) fallaSpan.textContent = fallaTxt;
+
+      const hidden = trDetalle.hasAttribute("hidden") || trDetalle.style.display === "none";
+      if (hidden) {
+        trDetalle.removeAttribute("hidden");
+        trDetalle.style.display = "table-row";
+        panel.removeAttribute("hidden");
+        btnToggle.textContent = "Menos info";
+
+        if (!CAM.has(id)) CAM.set(id, { stream: null, captures: [] });
+        await cargarFotos(id);
+      } else {
+        trDetalle.setAttribute("hidden", "");
+        trDetalle.style.display = "none";
+        panel.setAttribute("hidden", "");
+        btnToggle.textContent = "Más info";
+
+        // detener cámara si está abierta
+        const S = CAM.get(id);
+        if (S?.stream) { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; }
+        const v = $(`video.cam-preview[data-id="${id}"]`);
+        if (v) { v.srcObject = null; v.style.display = "none"; }
+        const shotBtn = $(`.cam-foto[data-id="${id}"]`);
+        if (shotBtn) shotBtn.disabled = true;
+        const cancelBtn = $(`.cam-cancel[data-id="${id}"]`);
+        if (cancelBtn) cancelBtn.disabled = true;
+        const camOnBtn = $(`.cam-abrir[data-id="${id}"]`);
+        if (camOnBtn) camOnBtn.disabled = false;
+      }
+      return;
+    }
+
+    // ====== ABRIR CÁMARA ======
+    if (btnCamOn) {
+      const id = btnCamOn.dataset.id;
+      const v = $(`video.cam-preview[data-id="${id}"]`);
+      const shotBtn = $(`.cam-foto[data-id="${id}"]`);
+      const cancelBtn = $(`.cam-cancel[data-id="${id}"]`);
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        if (v) {
+          v.srcObject = stream;
+          v.style.display = "block";
+        }
+        if (shotBtn) shotBtn.disabled = false;
+        if (cancelBtn) cancelBtn.disabled = false;
+        btnCamOn.disabled = true;
+
+        const S = CAM.get(id) || { stream: null, captures: [] };
+        if (S.stream) S.stream.getTracks().forEach(t => t.stop());
+        S.stream = stream;
+        CAM.set(id, S);
+      } catch (err) {
+        console.error(err);
+        alert("No se pudo abrir la cámara");
+      }
+      return;
+    }
+
+    // ====== TOMAR FOTO ======
+    if (btnShot) {
+      const id = btnShot.dataset.id;
+      const v = $(`video.cam-preview[data-id="${id}"]`);
+      if (!v?.videoWidth) return;
+
+      const c = document.createElement("canvas");
+      c.width = v.videoWidth;
+      c.height = v.videoHeight;
+      c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+
+      c.toBlob(blob => {
+        if (!blob) return;
+        const file = new File([blob], `foto-${Date.now()}.jpg`, { type: "image/jpeg" });
+
+        const S = CAM.get(id) || { stream: null, captures: [] };
+        S.captures.push(file);
+        CAM.set(id, S);
+
+        // preview rápida
+        const grid = $(`.fotos-grid[data-id="${id}"]`);
+        if (grid) {
+          const img = document.createElement("img");
+          img.src = URL.createObjectURL(file);
+          img.style.width = "120px";
+          img.style.height = "90px";
+          img.style.objectFit = "cover";
+          img.style.borderRadius = "8px";
+          img.style.margin = "6px";
+          grid.appendChild(img);
+        }
+      }, "image/jpeg", 0.92);
+      return;
+    }
+
+    // ====== CANCELAR CÁMARA ======
+    if (btnCancel) {
+      const id = btnCancel.dataset.id;
+      const v = $(`video.cam-preview[data-id="${id}"]`);
+      const S = CAM.get(id);
+
+      if (S?.stream) {
+        S.stream.getTracks().forEach(t => t.stop());
+        S.stream = null;
+        CAM.set(id, S);
+      }
+
+      if (v) {
+        v.srcObject = null;
+        v.style.display = "none";
+      }
+
+      const shotBtn = $(`.cam-foto[data-id="${id}"]`);
+      if (shotBtn) shotBtn.disabled = true;
+
+      const camOnBtn = $(`.cam-abrir[data-id="${id}"]`);
+      if (camOnBtn) camOnBtn.disabled = false;
+
+      btnCancel.disabled = true;
+      return;
+    }
+
+    // ====== GUARDAR ======
+    if (btnGuardar) {
+      const id = btnGuardar.dataset.id;
+      const panel = $(`.details[data-id="${id}"]`);
+      if (!panel) return;
+
+      const sel = panel.querySelector(".estado-select");
+      const vinEl = panel.querySelector(".vin-input");
+      const cobroEl = panel.querySelector(".cobro-input");
+      const mecanicoEl = panel.querySelector(".mecanico-input");
+
+      const fotosInput = panel.querySelector(`.fotos-input[data-id="${id}"]`);
+      const okSpan  = panel.querySelector(".save-ok");
+      const errSpan = panel.querySelector(".save-err");
+
+      try {
+        const payload = {};
+        if (sel?.value) payload.estado = sel.value;
+        if (vinEl) payload.vin = (vinEl.value || "").trim();
+        if (cobroEl) payload.cobro = (cobroEl.value || "").trim();
+        if (mecanicoEl) payload.mecanico = (mecanicoEl.value || "").trim();
+
+        await API.patch(id, payload);
+
+        // Fotos (input + cámara)
+        const S = CAM.get(id) || { captures: [] };
+        const bag = [];
+        if (fotosInput?.files?.length) bag.push(...fotosInput.files);
+        if (S.captures?.length) bag.push(...S.captures);
+
+        if (bag.length) {
+          await API.fotos.upload(id, bag);
+          if (fotosInput) fotosInput.value = "";
+          S.captures = [];
+          CAM.set(id, S);
+          await cargarFotos(id);
+        }
+
+        okSpan?.classList.remove("d-none");
+        errSpan?.classList.add("d-none");
+        setTimeout(() => okSpan?.classList.add("d-none"), 1500);
+
+        await cargarRecepcion();
+      } catch (err) {
+        console.error("Error guardando:", err);
+        okSpan?.classList.add("d-none");
+        errSpan?.classList.remove("d-none");
+        setTimeout(() => errSpan?.classList.add("d-none"), 2500);
+      }
+      return;
+    }
+
+    // ====== BORRAR FOTO ======
+    if (btnDelFoto) {
+      const fotoId = btnDelFoto.dataset.fotoId;
+      const grid = btnDelFoto.closest(".fotos-grid");
+      const ordenId = grid?.dataset.id;
+
+      try {
+        await API.fotos.remove(fotoId);
+        if (ordenId) await cargarFotos(ordenId);
+      } catch (err) {
+        console.error("No se pudo borrar foto:", err);
+      }
+      return;
+    }
+
+    // ====== BORRAR ORDEN ======
+    if (btnBorrar) {
+      const id = btnBorrar.dataset.id;
+      if (!id) return;
+      if (!confirm("¿Seguro borrar esta orden?")) return;
+
+      try {
+        await API.delete(id);
+        setMsg("Registro borrado.");
+        await cargarRecepcion();
+      } catch (err) {
+        console.error("No se pudo borrar:", err);
+        setMsg(err.message || "No se pudo borrar", false);
+      }
+      return;
+    }
+  }
+
+  // Delegación en ambas tablas
+  tbodyHoy?.addEventListener("click", handleTableClick);
+  tbodyPendientes?.addEventListener("click", handleTableClick);
+
+  // ====== Change de estado: actualizar badge del detalle en vivo ======
+  function handleChange(e) {
+    const sel = e.target.closest(".estado-select");
+    if (!sel) return;
+
+    const id = sel.dataset.id;
+    const detEstadoSlot = $(`.details[data-id="${id}"] .slot-estado`);
+    if (detEstadoSlot) {
+      detEstadoSlot.textContent = "";
+      detEstadoSlot.appendChild(createBadgeElement(sel.value, sel.value));
+    }
+  }
+  tbodyHoy?.addEventListener("change", handleChange);
+  tbodyPendientes?.addEventListener("change", handleChange);
+
+  // ====== Fullscreen ======
   function entrarPantallaCompleta(card, btn) {
     if (!card) return;
     card.dataset.full = "1";
@@ -446,5 +738,6 @@
   btnFullLista?.addEventListener("click", () => togglePantallaCompleta(cardLista, btnFullLista));
   btnFullPend?.addEventListener("click", () => togglePantallaCompleta(cardPend, btnFullPend));
 
+  // ====== INICIO ======
   cargarRecepcion();
 })();
