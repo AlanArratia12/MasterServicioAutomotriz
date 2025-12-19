@@ -25,6 +25,9 @@
   // Cámara por orden
   const CAM = new Map();
 
+  // Modo edición por orden
+  const EDIT = new Set(); // ids en modo edición
+
   const ESTADOS = [
     "Recibido",
     "Diagnóstico",
@@ -175,6 +178,7 @@
     return `${nums.slice(0,3)}-${nums.slice(3,6)}-${nums.slice(6)}`;
   }
 
+  // Inputs del formulario de alta
   ["#telefono1", "#telefono2"].forEach(sel => {
     const input = document.querySelector(sel);
     if (!input) return;
@@ -182,6 +186,21 @@
       input.value = formatTelefono(input.value);
     });
   });
+
+  // Inputs de edición dentro de "Más info" (delegado)
+  function hookTelefonoEdicion(panel) {
+    const t1 = panel.querySelector(".edit-tel1");
+    const t2 = panel.querySelector(".edit-tel2");
+    [t1, t2].forEach(inp => {
+      if (!inp) return;
+      // evitar doble binding
+      if (inp.dataset.bound === "1") return;
+      inp.dataset.bound = "1";
+      inp.addEventListener("input", () => {
+        inp.value = formatTelefono(inp.value);
+      });
+    });
+  }
 
   // ========= FECHAS (HOY vs PENDIENTES) =========
   function getRawFecha(r) {
@@ -195,24 +214,19 @@
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   }
 
-  // Soporta varios formatos
   function dateKeyFromRaw(raw) {
     if (!raw) return "";
     const s = String(raw);
 
-    // YYYY-MM-DD
     let m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
     if (m) return `${m[1]}-${m[2]}-${m[3]}`;
 
-    // YYYY/MM/DD
     m = s.match(/(\d{4})\/(\d{2})\/(\d{2})/);
     if (m) return `${m[1]}-${m[2]}-${m[3]}`;
 
-    // DD/MM/YYYY
     m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
     if (m) return `${m[3]}-${m[2]}-${m[1]}`;
 
-    // DD-MM-YYYY
     m = s.match(/(\d{2})-(\d{2})-(\d{4})/);
     if (m) return `${m[3]}-${m[2]}-${m[1]}`;
 
@@ -263,7 +277,7 @@
         return;
       }
 
-      // NO es hoy: Pendientes solo si estado está en la lista y NO es Entregado
+      // NO es hoy: Pendientes si estado está en lista y NO es Entregado
       if (ESTADOS_PEND.includes(est) && est !== "Entregado") {
         pend.push(r);
       }
@@ -292,6 +306,7 @@
     const panel = frag.querySelector(".details");
     panel?.setAttribute("data-id", r.id_orden);
 
+    // ===== Spans =====
     fill(frag.querySelector(".slot-det-cliente"), r.cliente || "");
     fill(frag.querySelector(".slot-det-tel1"), r.telefono1 ? formatTelefono(r.telefono1) : "");
     fill(frag.querySelector(".slot-det-tel2"), r.telefono2 ? formatTelefono(r.telefono2) : "-");
@@ -303,33 +318,94 @@
     fill(frag.querySelector(".slot-det-falla"), r.falla || "");
     fill(frag.querySelector(".slot-det-fecha"), getFechaTexto(r));
 
+    // ===== Inputs de edición (cliente/vehículo) =====
+    const inCliente = frag.querySelector(".edit-cliente");
+    const inTel1    = frag.querySelector(".edit-tel1");
+    const inTel2    = frag.querySelector(".edit-tel2");
+    const inMarca   = frag.querySelector(".edit-marca");
+    const inModelo  = frag.querySelector(".edit-modelo");
+    const inAnio    = frag.querySelector(".edit-anio");
+    const inColor   = frag.querySelector(".edit-color");
+
+    if (inCliente) { inCliente.value = r.cliente || ""; inCliente.dataset.id = r.id_orden; }
+    if (inTel1)    { inTel1.value    = r.telefono1 ? formatTelefono(r.telefono1) : ""; inTel1.dataset.id = r.id_orden; }
+    if (inTel2)    { inTel2.value    = r.telefono2 ? formatTelefono(r.telefono2) : ""; inTel2.dataset.id = r.id_orden; }
+    if (inMarca)   { inMarca.value   = r.marca || ""; inMarca.dataset.id = r.id_orden; }
+    if (inModelo)  { inModelo.value  = r.modelo || ""; inModelo.dataset.id = r.id_orden; }
+    if (inAnio)    { inAnio.value    = (r.anio ?? "").toString(); inAnio.dataset.id = r.id_orden; }
+    if (inColor)   { inColor.value   = r.color || ""; inColor.dataset.id = r.id_orden; }
+
+    // VIN
     const vinValor = (r.VIN ?? r.vin ?? "").toString();
     fill(frag.querySelector(".slot-det-vin"), vinValor || "-");
     const vinInput = frag.querySelector(".vin-input");
     if (vinInput) { vinInput.value = vinValor || ""; vinInput.dataset.id = r.id_orden; }
 
+    // Mecánico
     const mecValor = (r.mecanico ?? "").toString();
     fill(frag.querySelector(".slot-det-mecanico"), mecValor || "-");
     const mecInput = frag.querySelector(".mecanico-input");
     if (mecInput) { mecInput.value = mecValor || ""; mecInput.dataset.id = r.id_orden; }
 
+    // Cobro
     const cobroValor = (r.cobro ?? "").toString();
     const cobroInput = frag.querySelector(".cobro-input");
     if (cobroInput) { cobroInput.value = cobroValor || ""; cobroInput.dataset.id = r.id_orden; }
 
+    // Badge detalle
     const detEstadoSlot = frag.querySelector(".details .slot-estado");
     if (detEstadoSlot) {
       detEstadoSlot.textContent = "";
       detEstadoSlot.appendChild(createBadgeElement(estTexto, r.id_estatus || estTexto));
     }
 
+    // Select estado
     const sel = frag.querySelector(".estado-select");
     if (sel) {
       sel.innerHTML = ESTADOS.map(o => `<option ${o === estTexto ? "selected" : ""}>${o}</option>`).join("");
       sel.dataset.id = r.id_orden;
     }
 
+    // Si ya estaba en modo edición (por re-render), respétalo
+    const editBtn = frag.querySelector(".btn-editar");
+    if (editBtn) {
+      editBtn.dataset.id = r.id_orden;
+      const enEdicion = EDIT.has(String(r.id_orden));
+      setEditModeInFragment(frag, String(r.id_orden), enEdicion);
+    }
+
     return frag;
+  }
+
+  function setEditModeInPanel(panel, ordenId, enabled) {
+    const fields = [
+      ".edit-cliente",
+      ".edit-tel1",
+      ".edit-tel2",
+      ".edit-marca",
+      ".edit-modelo",
+      ".edit-anio",
+      ".edit-color",
+    ];
+    fields.forEach(sel => {
+      const el = panel.querySelector(sel);
+      if (el) el.disabled = !enabled;
+    });
+
+    hookTelefonoEdicion(panel);
+
+    const btn = panel.querySelector(`.btn-editar[data-id="${ordenId}"]`) || panel.querySelector(".btn-editar");
+    if (btn) {
+      btn.textContent = enabled ? "Cancelar" : "Editar";
+      btn.classList.toggle("btn-outline-primary", !enabled);
+      btn.classList.toggle("btn-outline-secondary", enabled);
+    }
+  }
+
+  function setEditModeInFragment(frag, ordenId, enabled) {
+    const panel = frag.querySelector(".details");
+    if (!panel) return;
+    setEditModeInPanel(panel, ordenId, enabled);
   }
 
   function renderHoy(rows) {
@@ -454,10 +530,25 @@
     const btnGuardar = e.target.closest(".guardar-cambios");
     const btnDelFoto = e.target.closest(".del-foto");
     const btnBorrar  = e.target.closest(".borrar");
+    const btnEditar  = e.target.closest(".btn-editar");
 
     const btnCamOn   = e.target.closest(".cam-abrir");
     const btnShot    = e.target.closest(".cam-foto");
     const btnCancel  = e.target.closest(".cam-cancel");
+
+    // ====== EDITAR / CANCELAR ======
+    if (btnEditar) {
+      const id = String(btnEditar.dataset.id || "");
+      const panel = $(`.details[data-id="${id}"]`);
+      if (!panel) return;
+
+      const enabled = !EDIT.has(id);
+      if (enabled) EDIT.add(id);
+      else EDIT.delete(id);
+
+      setEditModeInPanel(panel, id, enabled);
+      return;
+    }
 
     // ====== MÁS INFO ======
     if (btnToggle) {
@@ -478,6 +569,10 @@
         trDetalle.style.display = "table-row";
         panel.removeAttribute("hidden");
         btnToggle.textContent = "Menos info";
+
+        // al abrir: aplica modo edición si ya estaba activo
+        const enabled = EDIT.has(String(id));
+        setEditModeInPanel(panel, String(id), enabled);
 
         if (!CAM.has(id)) CAM.set(id, { stream: null, captures: [] });
         await cargarFotos(id);
@@ -549,7 +644,6 @@
         S.captures.push(file);
         CAM.set(id, S);
 
-        // preview rápida
         const grid = $(`.fotos-grid[data-id="${id}"]`);
         if (grid) {
           const img = document.createElement("img");
@@ -594,7 +688,7 @@
 
     // ====== GUARDAR ======
     if (btnGuardar) {
-      const id = btnGuardar.dataset.id;
+      const id = String(btnGuardar.dataset.id || "");
       const panel = $(`.details[data-id="${id}"]`);
       if (!panel) return;
 
@@ -603,16 +697,49 @@
       const cobroEl = panel.querySelector(".cobro-input");
       const mecanicoEl = panel.querySelector(".mecanico-input");
 
+      // nuevos: edición cliente/vehículo
+      const edCliente = panel.querySelector(".edit-cliente");
+      const edTel1    = panel.querySelector(".edit-tel1");
+      const edTel2    = panel.querySelector(".edit-tel2");
+      const edMarca   = panel.querySelector(".edit-marca");
+      const edModelo  = panel.querySelector(".edit-modelo");
+      const edAnio    = panel.querySelector(".edit-anio");
+      const edColor   = panel.querySelector(".edit-color");
+
       const fotosInput = panel.querySelector(`.fotos-input[data-id="${id}"]`);
       const okSpan  = panel.querySelector(".save-ok");
       const errSpan = panel.querySelector(".save-err");
 
       try {
         const payload = {};
+
+        // estado/vin/cobro/mecanico
         if (sel?.value) payload.estado = sel.value;
         if (vinEl) payload.vin = (vinEl.value || "").trim();
         if (cobroEl) payload.cobro = (cobroEl.value || "").trim();
         if (mecanicoEl) payload.mecanico = (mecanicoEl.value || "").trim();
+
+        // ✅ cliente/vehículo (mandamos 2 nombres por compatibilidad con backend)
+        if (edCliente) {
+          const v = (edCliente.value || "").trim();
+          payload.cliente = v;
+          payload.clienteNombre = v;
+        }
+        if (edTel1) {
+          const v = soloDigitos(edTel1.value);
+          payload.telefono1 = v;
+        }
+        if (edTel2) {
+          const v = soloDigitos(edTel2.value);
+          payload.telefono2 = v;
+        }
+        if (edMarca)  payload.marca  = (edMarca.value || "").trim();
+        if (edModelo) payload.modelo = (edModelo.value || "").trim();
+        if (edAnio) {
+          const n = Number((edAnio.value || "").trim());
+          if (!isNaN(n) && n > 0) payload.anio = n;
+        }
+        if (edColor) payload.color = (edColor.value || "").trim();
 
         await API.patch(id, payload);
 
@@ -633,6 +760,9 @@
         okSpan?.classList.remove("d-none");
         errSpan?.classList.add("d-none");
         setTimeout(() => okSpan?.classList.add("d-none"), 1500);
+
+        // si estaba en edición, lo apagamos al guardar
+        if (EDIT.has(id)) EDIT.delete(id);
 
         await cargarRecepcion();
       } catch (err) {
@@ -667,6 +797,7 @@
 
       try {
         await API.delete(id);
+        EDIT.delete(String(id));
         setMsg("Registro borrado.");
         await cargarRecepcion();
       } catch (err) {

@@ -6,13 +6,10 @@ block content
 
   // ===== FORMULARIO: SOLO ADMIN =====
   if user && user.role === 'admin'
-    // ===== FORMULARIO: envía a /api/ordenes y llena la tabla de abajo =====
     form#form-recepcion.card(enctype="multipart/form-data")
-      // ====== Sección: Datos del cliente ======
       .section
         h3 Datos del cliente
         .grid.grid-cliente
-          // Columna izquierda: campos
           .col
             label(for="clienteNombre") Nombre del cliente
             input#clienteNombre(type="text" name="clienteNombre" required placeholder="Ej. Juan Pérez")
@@ -23,11 +20,9 @@ block content
             label(for="telefono2") Teléfono 2 (opcional)
             input#telefono2(type="tel" name="telefono2" placeholder="Ej. 867-987-6543")
 
-          // Columna derecha: logo
           .col.logo-col
             img.logo(src="/images/logo-master.jpg" alt="Master Servicio Automotriz")
 
-      // ====== Sección: Datos del vehículo ======
       .section
         h3 Datos del vehículo
         .grid
@@ -47,28 +42,22 @@ block content
             label(for="color") Color
             input#color(type="text" name="color" required placeholder="Ej. Negro")
 
-          //- Falla
           .col.span2
-            label(for="falla") Falla del auto 
+            label(for="falla") Falla del auto
             textarea#falla(name="falla" required placeholder="Describe la falla...")
 
       .actions
         button.btn(type="submit") Agregar a la lista
         button.btn.secondary(type="button" id="btn-limpiar") Limpiar
 
-    // Mensaje de feedback solo cuando hay formulario
     p#msg-orden
 
   // ====== LISTAS / TABLAS (ADMIN Y EMPLEADOS) ======
   .cards
-    // ========== CARD: LISTA DE VEHÍCULOS HOY ==========
     .card#card-lista-hoy
       .card-header-flex.d-flex.justify-content-between.align-items-center.mb-2
         h3.mb-0 Lista de vehículos hoy
-        button#btn-fullscreen-hoy.btn.btn-primary.btn-sm(
-          type="button"
-          title="Ver solo la lista en pantalla completa"
-        ) ⛶
+        button#btn-fullscreen-hoy.btn.btn-primary.btn-sm(type="button" title="Ver solo la lista en pantalla completa") ⛶
 
       p.note Los datos capturados hoy se muestran aquí.
 
@@ -83,17 +72,12 @@ block content
               th Estado
               th(style="width:240px") Acciones
           tbody#tabla-lista
-            //- Filas generadas desde /js/recepcion.js
 
-    // ========== CARD: PENDIENTES ==========
     .card#card-pendientes
       .card-header-flex.d-flex.justify-content-between.align-items-center.mb-2
         h3.mb-0 Pendientes
-        button#btn-fullscreen-pendientes.btn.btn-primary.btn-sm(
-          type="button"
-          title="Ver solo la lista en pantalla completa"
-        ) ⛶
-      p.note En esta tabla solo aparecen vehículos en Diagnóstico, En espera de refacciones, Reparación o Listo.
+        button#btn-fullscreen-pendientes.btn.btn-primary.btn-sm(type="button" title="Ver solo la lista en pantalla completa") ⛶
+      p.note En esta tabla solo aparecen vehículos en Recibido (si NO es hoy), Diagnóstico, En espera de refacciones, Reparación o Listo.
 
       .table-responsive
         table.table#tabla-pendientes
@@ -106,11 +90,9 @@ block content
               th Estado
               th(style="width:240px") Acciones
           tbody#tbody-pendientes
-            //- Filas generadas desde /js/recepcion.js
 
   // ================= Template de fila + panel de detalles =================
   template#tpl-fila
-    //- === Fila principal (marcadores con clases .slot-*) ===
     tr
       td.slot-idx 1
       td.slot-cliente Juan Pérez
@@ -123,55 +105,84 @@ block content
         button.btn.secondary.btn-sm.toggle-detalle(data-id="__ID__") Más info
         button.btn.btn-danger.btn-sm.ms-2.borrar(data-id="__ID__") Borrar
 
-    //- === Panel de detalle (plegado) ===
     tr.row-details(hidden)
       td(colspan="6")
         .details(data-id="__ID__" hidden)
           // --------- FILA 1: CLIENTE + VEHÍCULO ---------
           .details-grid
-            // ----- TARJETA: CLIENTE -----
             .details-card.details-card--cliente
-              h5
-                i.bi.bi-person-fill.me-1
-                | Datos del cliente
-              p
+              .d-flex.justify-content-between.align-items-center
+                h5.mb-0
+                  i.bi.bi-person-fill.me-1
+                  | Datos del cliente
+                button.btn.btn-sm.btn-outline-primary.btn-editar(type="button" data-id="__ID__") Editar
+
+              p.mt-2.mb-2
                 strong Nombre:
                 |  
                 span.slot-det-cliente __CLIENTE__
-              p
+              .form-group.mb-2
+                label.form-label.mb-1 Nombre (editar)
+                input.form-control.form-control-sm.edit-cliente(type="text" disabled data-id="__ID__" placeholder="Nombre del cliente")
+
+              p.mb-2
                 strong Teléfono 1:
                 |  
                 span.slot-det-tel1 __TEL1__
-              p
+              .form-group.mb-2
+                label.form-label.mb-1 Teléfono 1 (editar)
+                input.form-control.form-control-sm.edit-tel1(type="tel" disabled data-id="__ID__" placeholder="867-123-4567")
+
+              p.mb-2
                 strong Teléfono 2:
                 |  
                 span.slot-det-tel2 __TEL2__
+              .form-group.mb-1
+                label.form-label.mb-1 Teléfono 2 (editar)
+                input.form-control.form-control-sm.edit-tel2(type="tel" disabled data-id="__ID__" placeholder="867-987-6543")
 
-            // ----- TARJETA: VEHÍCULO + VIN -----
             .details-card.details-card--vehiculo
               h5
                 i.bi.bi-car-front-fill.me-1
                 | Datos del vehículo
-              p
+
+              p.mb-2
                 strong Marca:
                 |  
                 span.slot-det-marca __MARCA__
-              p
+              .form-group.mb-2
+                label.form-label.mb-1 Marca (editar)
+                input.form-control.form-control-sm.edit-marca(type="text" disabled data-id="__ID__" placeholder="Nissan")
+
+              p.mb-2
                 strong Modelo:
                 |  
                 span.slot-det-modelo __MODELO__
-              p
+              .form-group.mb-2
+                label.form-label.mb-1 Modelo (editar)
+                input.form-control.form-control-sm.edit-modelo(type="text" disabled data-id="__ID__" placeholder="Altima")
+
+              p.mb-2
                 strong Año:
                 |  
                 span.slot-det-anio __ANIO__
-              p
+              .form-group.mb-2
+                label.form-label.mb-1 Año (editar)
+                input.form-control.form-control-sm.edit-anio(type="number" disabled data-id="__ID__" min="1950" max="2100" placeholder="2017")
+
+              p.mb-2
                 strong Color:
                 |  
                 span.slot-det-color __COLOR__
+              .form-group.mb-2
+                label.form-label.mb-1 Color (editar)
+                input.form-control.form-control-sm.edit-color(type="text" disabled data-id="__ID__" placeholder="Negro")
+
               p
                 strong Fecha de ingreso:
                 |  
                 span.slot-det-fecha __FECHA__
+
               p.mb-1.mt-2
                 strong VIN actual:
                 |  
@@ -195,6 +206,7 @@ block content
                 strong Falla reportada:
                 |  
                 span.slot-det-falla
+
               p.mt-2
                 strong Estado actual:
                 |  
@@ -216,21 +228,12 @@ block content
                 | Seguimiento
               if user && user.role === 'admin'
                 label.form-label.mb-1 Presupuesto / Cobro
-                textarea.form-control.form-control-sm.cobro-input(
-                  rows="3"
-                  data-id="__ID__"
-                )
+                textarea.form-control.form-control-sm.cobro-input(rows="3" data-id="__ID__")
                 label.form-label.mt-2.mb-1 Mecánico que reparó
-                input.form-control.form-control-sm.mecanico-input(
-                  type="text"
-                  data-id="__ID__"
-                )
+                input.form-control.form-control-sm.mecanico-input(type="text" data-id="__ID__")
               else
                 label.form-label.mb-1 Mecánico que reparó
-                input.form-control.form-control-sm.mecanico-input(
-                  type="text"
-                  data-id="__ID__"
-                )
+                input.form-control.form-control-sm.mecanico-input(type="text" data-id="__ID__")
 
           // --------- FILA 3: FOTOS ---------
           h5.mt-3
@@ -251,18 +254,9 @@ block content
               .flex.gap-2.mb-2
                 button.btn.btn-sm.cam-abrir(type="button" data-id="__ID__") Abrir cámara
                 button.btn.btn-sm.cam-foto(type="button" data-id="__ID__" disabled) Tomar foto
-                button.btn.btn-sm.btn-outline-secondary.cam-cancel(
-                  type="button"
-                  data-id="__ID__"
-                  disabled
-                ) Cancelar cámara
+                button.btn.btn-sm.btn-outline-secondary.cam-cancel(type="button" data-id="__ID__" disabled) Cancelar cámara
 
-              video.cam-preview(
-                autoplay
-                playsinline
-                style="max-width:260px; display:none"
-                data-id="__ID__"
-              )
+              video.cam-preview(autoplay playsinline style="max-width:260px; display:none" data-id="__ID__")
 
             .details-card.details-card--galeria
               .fotos-grid(data-id="__ID__")
@@ -274,5 +268,4 @@ block content
             span.ms-2.text-danger.small.save-err.d-none(data-id="__ID__") Error al guardar
 
   script(src="/js/main.js?v=8" defer)
-  script(src="/js/recepcion.js?v=19" defer)
-
+  script(src="/js/recepcion.js?v=20" defer)
