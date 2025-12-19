@@ -27,7 +27,6 @@
     "Entregado",
   ];
 
-  // Pendientes incluye Recibido, PERO SOLO si NO es hoy
   const ESTADOS_PEND = [
     "Recibido",
     "Diagnóstico",
@@ -98,12 +97,27 @@
     if (text) setTimeout(() => { msg.textContent = ""; }, 3000);
   }
 
-  function fill(el, text) { if (el) el.value !== undefined ? (el.value = text ?? "") : (el.textContent = text ?? ""); }
+  function fill(el, text) {
+    if (!el) return;
+    if (el.value !== undefined) el.value = text ?? "";
+    else el.textContent = text ?? "";
+  }
 
   function autoText(r) {
     const anio  = (r.anio ?? "").toString();
     const color = r.color || "";
     return `${r.marca || ""} ${r.modelo || ""} ${anio} — ${color}`.trim();
+  }
+
+  // ✅ IMPORTANTE: la falla puede venir con distinto nombre desde el backend
+  function getFalla(r) {
+    return (
+      r?.falla ??
+      r?.falla_reportada ??
+      r?.fallaReportada ??
+      r?.falla_reporte ??
+      ""
+    );
   }
 
   function mapEstatus(id) {
@@ -158,14 +172,12 @@
     return `${nums.slice(0,3)}-${nums.slice(3,6)}-${nums.slice(6)}`;
   }
 
-  // Formateo en inputs del formulario principal
   ["#telefono1", "#telefono2"].forEach(sel => {
     const input = document.querySelector(sel);
     if (!input) return;
     input.addEventListener("input", () => { input.value = formatTelefono(input.value); });
   });
 
-  // Formateo en inputs de edición (delegación)
   function onTelefonoEditInput(e) {
     const t = e.target;
     if (!t) return;
@@ -230,8 +242,6 @@
     });
   }
 
-  // ✅ Regla: HOY (cualquier estado) siempre en HOY, nunca en pendientes.
-  // ✅ Pendientes: NO es hoy y NO entregado y estado en ESTADOS_PEND (incluye Recibido).
   function splitHoyPend(rows) {
     const hoy = [];
     const pend = [];
@@ -258,11 +268,12 @@
   function buildFila(r, idx) {
     const frag = tpl.content.cloneNode(true);
     const estTexto = mapEstatus(r.id_estatus);
+    const fallaTxt = getFalla(r);
 
     fill(frag.querySelector(".slot-idx"), String(idx));
     fill(frag.querySelector(".slot-cliente"), r.cliente || "");
     fill(frag.querySelector(".slot-auto"), autoText(r));
-    fill(frag.querySelector(".slot-falla"), r.falla || "");
+    fill(frag.querySelector(".slot-falla"), fallaTxt || "");
 
     const estadoSlot = frag.querySelector(".slot-estado");
     if (estadoSlot) {
@@ -274,7 +285,6 @@
     const panel = frag.querySelector(".details");
     panel?.setAttribute("data-id", r.id_orden);
 
-    // Fecha
     const spanFecha = frag.querySelector(".slot-det-fecha");
     if (spanFecha) spanFecha.textContent = getFechaTexto(r);
 
@@ -324,7 +334,9 @@
     if (editModelo) editModelo.value = r.modelo || "";
     if (editAnio) editAnio.value = (r.anio ?? "").toString();
     if (editColor) editColor.value = r.color || "";
-    if (editFalla) editFalla.value = r.falla || "";
+
+    // ✅ AQUÍ ESTABA EL PROBLEMA: ahora usa getFalla(r)
+    if (editFalla) editFalla.value = fallaTxt || "";
 
     return frag;
   }
@@ -379,7 +391,7 @@
 
         const img = document.createElement("img");
         const ruta = String(f.ruta_archivo || "");
-        const src = /^https?:\/\//i.test(ruta) show ? ruta : "/" + ruta.replace(/^\/+/, "");
+        const src = /^https?:\/\//i.test(ruta) ? ruta : "/" + ruta.replace(/^\/+/, "");
         img.src = src;
         img.alt = f.nombre_original || "foto";
         img.style.width = "120px";
@@ -418,7 +430,6 @@
     try {
       const fd = new FormData(form);
 
-      // Mandar SOLO dígitos al backend
       const tel1Input = $("#telefono1");
       const tel2Input = $("#telefono2");
       if (tel1Input) fd.set("telefono1", soloDigitos(tel1Input.value));
@@ -436,7 +447,6 @@
     }
   });
 
-  // Limpiar con confirmación
   btnClear?.addEventListener("click", () => {
     if (!form) return;
     const seguro = confirm("⚠️ ¿Seguro que deseas limpiar el formulario?\n\nLos datos capturados se perderán.");
@@ -445,7 +455,6 @@
     $("#clienteNombre")?.focus();
   });
 
-  // ========= INTERACCIONES (HOY y PENDIENTES) =========
   async function handleTableClick(e) {
     const btnToggle  = e.target.closest(".toggle-detalle");
     const btnGuardar = e.target.closest(".guardar-cambios");
@@ -458,7 +467,6 @@
     const btnShot    = e.target.closest(".cam-foto");
     const btnCancel  = e.target.closest(".cam-cancel");
 
-    // ====== MÁS INFO ======
     if (btnToggle) {
       const id = btnToggle.dataset.id;
       const trPrincipal = btnToggle.closest("tr");
@@ -495,7 +503,6 @@
       return;
     }
 
-    // ====== EDITAR (habilita inputs) ======
     if (btnEditar) {
       const id = btnEditar.dataset.id;
       const panel = $(`.details[data-id="${id}"]`);
@@ -519,7 +526,6 @@
       return;
     }
 
-    // ====== CANCELAR EDICIÓN ======
     if (btnCancelarEd) {
       const id = btnCancelarEd.dataset.id;
       const panel = $(`.details[data-id="${id}"]`);
@@ -543,7 +549,6 @@
       return;
     }
 
-    // ====== ABRIR CÁMARA ======
     if (btnCamOn) {
       const id = btnCamOn.dataset.id;
       const v = $(`video.cam-preview[data-id="${id}"]`);
@@ -568,7 +573,6 @@
       return;
     }
 
-    // ====== TOMAR FOTO ======
     if (btnShot) {
       const id = btnShot.dataset.id;
       const v = $(`video.cam-preview[data-id="${id}"]`);
@@ -602,7 +606,6 @@
       return;
     }
 
-    // ====== CANCELAR CÁMARA ======
     if (btnCancel) {
       const id = btnCancel.dataset.id;
       const v = $(`video.cam-preview[data-id="${id}"]`);
@@ -614,10 +617,7 @@
         CAM.set(id, S);
       }
 
-      if (v) {
-        v.srcObject = null;
-        v.style.display = "none";
-      }
+      if (v) { v.srcObject = null; v.style.display = "none"; }
 
       const shotBtn = $(`.cam-foto[data-id="${id}"]`);
       if (shotBtn) shotBtn.disabled = true;
@@ -629,7 +629,6 @@
       return;
     }
 
-    // ====== GUARDAR ======
     if (btnGuardar) {
       const id = btnGuardar.dataset.id;
       const panel = $(`.details[data-id="${id}"]`);
@@ -640,7 +639,6 @@
       const cobroEl = panel.querySelector(".cobro-input");
       const mecanicoEl = panel.querySelector(".mecanico-input");
 
-      // edición (solo si está en modo edición)
       const editing = panel.dataset.editing === "1";
       const editCliente = panel.querySelector(".edit-cliente");
       const editTel1    = panel.querySelector(".edit-tel1");
@@ -657,14 +655,11 @@
 
       try {
         const payload = {};
-
-        // siempre
         if (sel?.value) payload.estado = sel.value;
         if (vinEl) payload.vin = (vinEl.value || "").trim();
         if (cobroEl) payload.cobro = (cobroEl.value || "").trim();
         if (mecanicoEl) payload.mecanico = (mecanicoEl.value || "").trim();
 
-        // solo si editar está activo
         if (editing) {
           if (editCliente) payload.clienteNombre = (editCliente.value || "").trim();
           if (editTel1) payload.telefono1 = soloDigitos(editTel1.value);
@@ -678,7 +673,6 @@
 
         await API.patch(id, payload);
 
-        // Fotos
         const S = CAM.get(id) || { captures: [] };
         const bag = [];
         if (fotosInput?.files?.length) bag.push(...fotosInput.files);
@@ -692,7 +686,6 @@
           await cargarFotos(id);
         }
 
-        // salir de modo edición (si estaba)
         if (editing) {
           panel.dataset.editing = "0";
           const inputs = panel.querySelectorAll(
@@ -719,7 +712,6 @@
       return;
     }
 
-    // ====== BORRAR FOTO ======
     if (btnDelFoto) {
       const fotoId = btnDelFoto.dataset.fotoId;
       const grid = btnDelFoto.closest(".fotos-grid");
@@ -734,7 +726,6 @@
       return;
     }
 
-    // ====== BORRAR ORDEN ======
     if (btnBorrar) {
       const id = btnBorrar.dataset.id;
       if (!id) return;
@@ -752,15 +743,12 @@
     }
   }
 
-  // Delegación
   tbodyHoy?.addEventListener("click", handleTableClick);
   tbodyPendientes?.addEventListener("click", handleTableClick);
 
-  // Formateo teléfonos en edición
   tbodyHoy?.addEventListener("input", onTelefonoEditInput);
   tbodyPendientes?.addEventListener("input", onTelefonoEditInput);
 
-  // Change estado → badge en vivo
   function handleChange(e) {
     const sel = e.target.closest(".estado-select");
     if (!sel) return;
@@ -774,7 +762,6 @@
   tbodyHoy?.addEventListener("change", handleChange);
   tbodyPendientes?.addEventListener("change", handleChange);
 
-  // ====== Fullscreen ======
   function entrarPantallaCompleta(card, btn) {
     if (!card) return;
     card.dataset.full = "1";
@@ -816,6 +803,5 @@
   btnFullLista?.addEventListener("click", () => togglePantallaCompleta(cardLista, btnFullLista));
   btnFullPend?.addEventListener("click", () => togglePantallaCompleta(cardPend, btnFullPend));
 
-  // INICIO
   cargarRecepcion();
 })();
