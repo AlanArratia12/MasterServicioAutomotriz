@@ -4,7 +4,6 @@ extends layout
 block content
   h1 Recepción de vehículos
 
-  // ===== FORMULARIO: SOLO ADMIN =====
   if user && user.role === 'admin'
     form#form-recepcion.card(enctype="multipart/form-data")
       .section
@@ -52,7 +51,6 @@ block content
 
     p#msg-orden
 
-  // ====== LISTAS / TABLAS (ADMIN Y EMPLEADOS) ======
   .cards
     .card#card-lista-hoy
       .card-header-flex.d-flex.justify-content-between.align-items-center.mb-2
@@ -77,7 +75,7 @@ block content
       .card-header-flex.d-flex.justify-content-between.align-items-center.mb-2
         h3.mb-0 Pendientes
         button#btn-fullscreen-pendientes.btn.btn-primary.btn-sm(type="button" title="Ver solo la lista en pantalla completa") ⛶
-      p.note En esta tabla solo aparecen vehículos en Recibido (si NO es hoy), Diagnóstico, En espera de refacciones, Reparación o Listo.
+      p.note En esta tabla solo aparecen vehículos NO de hoy y NO entregados.
 
       .table-responsive
         table.table#tabla-pendientes
@@ -91,7 +89,6 @@ block content
               th(style="width:240px") Acciones
           tbody#tbody-pendientes
 
-  // ================= Template de fila + panel de detalles =================
   template#tpl-fila
     tr
       td.slot-idx 1
@@ -108,77 +105,39 @@ block content
     tr.row-details(hidden)
       td(colspan="6")
         .details(data-id="__ID__" hidden)
-          // --------- FILA 1: CLIENTE + VEHÍCULO ---------
           .details-grid
             .details-card.details-card--cliente
-              .d-flex.justify-content-between.align-items-center
-                h5.mb-0
-                  i.bi.bi-person-fill.me-1
-                  | Datos del cliente
-                button.btn.btn-sm.btn-outline-primary.btn-editar(type="button" data-id="__ID__") Editar
+              h5
+                i.bi.bi-person-fill.me-1
+                | Datos del cliente
 
-              p.mt-2.mb-2
-                strong Nombre:
-                |  
-                span.slot-det-cliente __CLIENTE__
-              .form-group.mb-2
-                label.form-label.mb-1 Nombre (editar)
-                input.form-control.form-control-sm.edit-cliente(type="text" disabled data-id="__ID__" placeholder="Nombre del cliente")
+              label.form-label.mb-1 Nombre
+              input.form-control.form-control-sm.edit-cliente(type="text" disabled)
 
-              p.mb-2
-                strong Teléfono 1:
-                |  
-                span.slot-det-tel1 __TEL1__
-              .form-group.mb-2
-                label.form-label.mb-1 Teléfono 1 (editar)
-                input.form-control.form-control-sm.edit-tel1(type="tel" disabled data-id="__ID__" placeholder="867-123-4567")
+              label.form-label.mt-2.mb-1 Teléfono 1
+              input.form-control.form-control-sm.edit-tel1(type="tel" disabled)
 
-              p.mb-2
-                strong Teléfono 2:
-                |  
-                span.slot-det-tel2 __TEL2__
-              .form-group.mb-1
-                label.form-label.mb-1 Teléfono 2 (editar)
-                input.form-control.form-control-sm.edit-tel2(type="tel" disabled data-id="__ID__" placeholder="867-987-6543")
+              label.form-label.mt-2.mb-1 Teléfono 2
+              input.form-control.form-control-sm.edit-tel2(type="tel" disabled)
 
             .details-card.details-card--vehiculo
               h5
                 i.bi.bi-car-front-fill.me-1
                 | Datos del vehículo
 
-              p.mb-2
-                strong Marca:
-                |  
-                span.slot-det-marca __MARCA__
-              .form-group.mb-2
-                label.form-label.mb-1 Marca (editar)
-                input.form-control.form-control-sm.edit-marca(type="text" disabled data-id="__ID__" placeholder="Nissan")
+              label.form-label.mb-1 Marca
+              input.form-control.form-control-sm.edit-marca(type="text" disabled)
 
-              p.mb-2
-                strong Modelo:
-                |  
-                span.slot-det-modelo __MODELO__
-              .form-group.mb-2
-                label.form-label.mb-1 Modelo (editar)
-                input.form-control.form-control-sm.edit-modelo(type="text" disabled data-id="__ID__" placeholder="Altima")
+              label.form-label.mt-2.mb-1 Modelo
+              input.form-control.form-control-sm.edit-modelo(type="text" disabled)
 
-              p.mb-2
-                strong Año:
-                |  
-                span.slot-det-anio __ANIO__
-              .form-group.mb-2
-                label.form-label.mb-1 Año (editar)
-                input.form-control.form-control-sm.edit-anio(type="number" disabled data-id="__ID__" min="1950" max="2100" placeholder="2017")
+              label.form-label.mt-2.mb-1 Año
+              input.form-control.form-control-sm.edit-anio(type="number" min="1950" max="2100" disabled)
 
-              p.mb-2
-                strong Color:
-                |  
-                span.slot-det-color __COLOR__
-              .form-group.mb-2
-                label.form-label.mb-1 Color (editar)
-                input.form-control.form-control-sm.edit-color(type="text" disabled data-id="__ID__" placeholder="Negro")
+              label.form-label.mt-2.mb-1 Color
+              input.form-control.form-control-sm.edit-color(type="text" disabled)
 
-              p
+              p.mt-2
                 strong Fecha de ingreso:
                 |  
                 span.slot-det-fecha __FECHA__
@@ -187,6 +146,7 @@ block content
                 strong VIN actual:
                 |  
                 span.slot-det-vin __VIN__
+
               label.form-label.mb-1(for="vin-__ID__") Capturar / editar VIN
               input.form-control.form-control-sm.vin-input(
                 id="vin-__ID__"
@@ -196,16 +156,14 @@ block content
                 data-id="__ID__"
               )
 
-          // --------- FILA 2: SERVICIO / ESTADO + SEGUIMIENTO ---------
           .details-grid.mt-2
             .details-card.details-card--servicio
               h5
                 i.bi.bi-wrench-adjustable.me-1
                 | Servicio
-              p
-                strong Falla reportada:
-                |  
-                span.slot-det-falla
+
+              label.form-label.mb-1 Falla reportada
+              textarea.form-control.form-control-sm.edit-falla(rows="3" disabled)
 
               p.mt-2
                 strong Estado actual:
@@ -229,13 +187,14 @@ block content
               if user && user.role === 'admin'
                 label.form-label.mb-1 Presupuesto / Cobro
                 textarea.form-control.form-control-sm.cobro-input(rows="3" data-id="__ID__")
-                label.form-label.mt-2.mb-1 Mecánico que reparó
-                input.form-control.form-control-sm.mecanico-input(type="text" data-id="__ID__")
               else
-                label.form-label.mb-1 Mecánico que reparó
-                input.form-control.form-control-sm.mecanico-input(type="text" data-id="__ID__")
+                //- empleado no edita cobro (se ve, pero no se manda si no eres admin)
+                label.form-label.mb-1 Presupuesto / Cobro
+                textarea.form-control.form-control-sm.cobro-input(rows="3" data-id="__ID__" disabled)
 
-          // --------- FILA 3: FOTOS ---------
+              label.form-label.mt-2.mb-1 Mecánico que reparó
+              input.form-control.form-control-sm.mecanico-input(type="text" data-id="__ID__")
+
           h5.mt-3
             i.bi.bi-camera-fill.me-1
             | Evidencia fotográfica
@@ -263,9 +222,12 @@ block content
                 p.text-muted.small(data-placeholder="no-fotos") Sin fotos aún.
 
           .details-foot.mt-3
-            button.btn.btn-sm.guardar-cambios(data-id="__ID__") Guardar
+            button.btn.btn-sm.btn-warning.btn-editar(type="button" data-id="__ID__") Editar
+            button.btn.btn-sm.btn-outline-secondary.ms-2.btn-cancelar-edicion(type="button" data-id="__ID__" hidden) Cancelar
+            button.btn.btn-sm.guardar-cambios.ms-2(data-id="__ID__") Guardar
             span.ms-2.text-success.small.save-ok.d-none(data-id="__ID__") Guardado ✓
             span.ms-2.text-danger.small.save-err.d-none(data-id="__ID__") Error al guardar
 
   script(src="/js/main.js?v=8" defer)
+  //- 👇 sube versión para forzar cache bust
   script(src="/js/recepcion.js?v=20" defer)

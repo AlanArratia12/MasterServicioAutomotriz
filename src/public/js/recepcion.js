@@ -1,32 +1,22 @@
 // src/public/js/recepcion.js
 (() => {
   const $  = (s, c = document) => c.querySelector(s);
-  const $$ = (s, c = document) => Array.from(c.querySelectorAll(s));
 
   const form      = $("#form-recepcion");
   const btnClear  = $("#btn-limpiar");
   const msg       = $("#msg-orden");
   const tpl       = $("#tpl-fila");
 
-  // Tabla HOY
-  const tbodyHoy = $("#tabla-lista");
+  const tbodyHoy        = $("#tabla-lista");
+  const tbodyPendientes = $("#tbody-pendientes");
 
-  // Card + fullscreen HOY
   const cardLista    = $("#card-lista-hoy");
   const btnFullLista = $("#btn-fullscreen-hoy");
 
-  // Card + fullscreen PENDIENTES
   const cardPend    = $("#card-pendientes");
   const btnFullPend = $("#btn-fullscreen-pendientes");
 
-  // Tabla PENDIENTES
-  const tbodyPendientes = $("#tbody-pendientes");
-
-  // Cámara por orden
   const CAM = new Map();
-
-  // Modo edición por orden
-  const EDIT = new Set(); // ids en modo edición
 
   const ESTADOS = [
     "Recibido",
@@ -79,13 +69,8 @@
       },
       upload: async (ordenId, filesOrBlobs) => {
         const fd = new FormData();
-        for (const f of filesOrBlobs) {
-          fd.append("fotos", f, f.name || `foto-${Date.now()}.jpg`);
-        }
-        const res = await fetch(`/api/ordenes/${ordenId}/fotos`, {
-          method: "POST",
-          body: fd,
-        });
+        for (const f of filesOrBlobs) fd.append("fotos", f, f.name || `foto-${Date.now()}.jpg`);
+        const res = await fetch(`/api/ordenes/${ordenId}/fotos`, { method: "POST", body: fd });
         if (!res.ok) throw await parseError(res);
         return res.json();
       },
@@ -113,7 +98,7 @@
     if (text) setTimeout(() => { msg.textContent = ""; }, 3000);
   }
 
-  function fill(el, text) { if (el) el.textContent = text ?? ""; }
+  function fill(el, text) { if (el) el.value !== undefined ? (el.value = text ?? "") : (el.textContent = text ?? ""); }
 
   function autoText(r) {
     const anio  = (r.anio ?? "").toString();
@@ -134,7 +119,6 @@
     let s = { bg: "#dbeafe", fg: "#1e3a8a", br: "#bfdbfe" };
     const num = Number(id);
     const text = String(id).toLowerCase();
-
     if ((!isNaN(num) && num === 1) || text.includes("recibido")) {
       s = { bg: "#dbeafe", fg: "#1e3a8a", br: "#bfdbfe" };
     } else if ((!isNaN(num) && [2,3,4].includes(num)) || text.match(/diagn|espera|repara/)) {
@@ -151,7 +135,6 @@
     const estilo = getEstatusStyles(idOTextoOrigen);
     const badge = document.createElement("span");
     badge.textContent = texto;
-
     badge.style.display = "inline-block";
     badge.style.padding = "5px 12px";
     badge.style.borderRadius = "50px";
@@ -162,14 +145,11 @@
     badge.style.backgroundColor = estilo.bg;
     badge.style.color = estilo.fg;
     badge.style.border = "1px solid " + estilo.br;
-
     return badge;
   }
 
   // ========= TELÉFONO =========
-  function soloDigitos(v) {
-    return String(v || "").replace(/\D/g, "").slice(0, 10);
-  }
+  function soloDigitos(v) { return String(v || "").replace(/\D/g, "").slice(0, 10); }
 
   function formatTelefono(value) {
     const nums = soloDigitos(value);
@@ -178,42 +158,31 @@
     return `${nums.slice(0,3)}-${nums.slice(3,6)}-${nums.slice(6)}`;
   }
 
-  // Inputs del formulario de alta
+  // Formateo en inputs del formulario principal
   ["#telefono1", "#telefono2"].forEach(sel => {
     const input = document.querySelector(sel);
     if (!input) return;
-    input.addEventListener("input", () => {
-      input.value = formatTelefono(input.value);
-    });
+    input.addEventListener("input", () => { input.value = formatTelefono(input.value); });
   });
 
-  // Inputs de edición dentro de "Más info" (delegado)
-  function hookTelefonoEdicion(panel) {
-    const t1 = panel.querySelector(".edit-tel1");
-    const t2 = panel.querySelector(".edit-tel2");
-    [t1, t2].forEach(inp => {
-      if (!inp) return;
-      // evitar doble binding
-      if (inp.dataset.bound === "1") return;
-      inp.dataset.bound = "1";
-      inp.addEventListener("input", () => {
-        inp.value = formatTelefono(inp.value);
-      });
-    });
+  // Formateo en inputs de edición (delegación)
+  function onTelefonoEditInput(e) {
+    const t = e.target;
+    if (!t) return;
+    if (t.classList.contains("edit-tel1") || t.classList.contains("edit-tel2")) {
+      t.value = formatTelefono(t.value);
+    }
   }
 
-  // ========= FECHAS (HOY vs PENDIENTES) =========
+  // ========= FECHAS =========
   function getRawFecha(r) {
     return r?.fecha_ingreso || r?.created_at || r?.fecha || r?.fechaIngreso || "";
   }
-
   function pad2(n) { return String(n).padStart(2, "0"); }
-
   function todayKeyLocal() {
     const d = new Date();
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   }
-
   function dateKeyFromRaw(raw) {
     if (!raw) return "";
     const s = String(raw);
@@ -232,7 +201,6 @@
 
     return "";
   }
-
   function getFechaTexto(r) {
     const raw = getRawFecha(r);
     const key = dateKeyFromRaw(raw);
@@ -262,6 +230,8 @@
     });
   }
 
+  // ✅ Regla: HOY (cualquier estado) siempre en HOY, nunca en pendientes.
+  // ✅ Pendientes: NO es hoy y NO entregado y estado en ESTADOS_PEND (incluye Recibido).
   function splitHoyPend(rows) {
     const hoy = [];
     const pend = [];
@@ -271,14 +241,12 @@
       const est = mapEstatus(r.id_estatus);
       const key = dateKeyFromRaw(getRawFecha(r));
 
-      // Si no podemos leer fecha, lo tratamos como HOY para no mandarlo a pendientes por error
       if (!key || key === hoyKey) {
         hoy.push(r);
         return;
       }
 
-      // NO es hoy: Pendientes si estado está en lista y NO es Entregado
-      if (ESTADOS_PEND.includes(est) && est !== "Entregado") {
+      if (est !== "Entregado" && ESTADOS_PEND.includes(est)) {
         pend.push(r);
       }
     });
@@ -306,106 +274,59 @@
     const panel = frag.querySelector(".details");
     panel?.setAttribute("data-id", r.id_orden);
 
-    // ===== Spans =====
-    fill(frag.querySelector(".slot-det-cliente"), r.cliente || "");
-    fill(frag.querySelector(".slot-det-tel1"), r.telefono1 ? formatTelefono(r.telefono1) : "");
-    fill(frag.querySelector(".slot-det-tel2"), r.telefono2 ? formatTelefono(r.telefono2) : "-");
-
-    fill(frag.querySelector(".slot-det-marca"), r.marca || "");
-    fill(frag.querySelector(".slot-det-modelo"), r.modelo || "");
-    fill(frag.querySelector(".slot-det-anio"), r.anio ?? "");
-    fill(frag.querySelector(".slot-det-color"), r.color || "");
-    fill(frag.querySelector(".slot-det-falla"), r.falla || "");
-    fill(frag.querySelector(".slot-det-fecha"), getFechaTexto(r));
-
-    // ===== Inputs de edición (cliente/vehículo) =====
-    const inCliente = frag.querySelector(".edit-cliente");
-    const inTel1    = frag.querySelector(".edit-tel1");
-    const inTel2    = frag.querySelector(".edit-tel2");
-    const inMarca   = frag.querySelector(".edit-marca");
-    const inModelo  = frag.querySelector(".edit-modelo");
-    const inAnio    = frag.querySelector(".edit-anio");
-    const inColor   = frag.querySelector(".edit-color");
-
-    if (inCliente) { inCliente.value = r.cliente || ""; inCliente.dataset.id = r.id_orden; }
-    if (inTel1)    { inTel1.value    = r.telefono1 ? formatTelefono(r.telefono1) : ""; inTel1.dataset.id = r.id_orden; }
-    if (inTel2)    { inTel2.value    = r.telefono2 ? formatTelefono(r.telefono2) : ""; inTel2.dataset.id = r.id_orden; }
-    if (inMarca)   { inMarca.value   = r.marca || ""; inMarca.dataset.id = r.id_orden; }
-    if (inModelo)  { inModelo.value  = r.modelo || ""; inModelo.dataset.id = r.id_orden; }
-    if (inAnio)    { inAnio.value    = (r.anio ?? "").toString(); inAnio.dataset.id = r.id_orden; }
-    if (inColor)   { inColor.value   = r.color || ""; inColor.dataset.id = r.id_orden; }
+    // Fecha
+    const spanFecha = frag.querySelector(".slot-det-fecha");
+    if (spanFecha) spanFecha.textContent = getFechaTexto(r);
 
     // VIN
     const vinValor = (r.VIN ?? r.vin ?? "").toString();
-    fill(frag.querySelector(".slot-det-vin"), vinValor || "-");
+    const spanVin = frag.querySelector(".slot-det-vin");
+    if (spanVin) spanVin.textContent = vinValor || "-";
     const vinInput = frag.querySelector(".vin-input");
     if (vinInput) { vinInput.value = vinValor || ""; vinInput.dataset.id = r.id_orden; }
 
-    // Mecánico
+    // Seguimiento
     const mecValor = (r.mecanico ?? "").toString();
-    fill(frag.querySelector(".slot-det-mecanico"), mecValor || "-");
     const mecInput = frag.querySelector(".mecanico-input");
     if (mecInput) { mecInput.value = mecValor || ""; mecInput.dataset.id = r.id_orden; }
 
-    // Cobro
     const cobroValor = (r.cobro ?? "").toString();
     const cobroInput = frag.querySelector(".cobro-input");
     if (cobroInput) { cobroInput.value = cobroValor || ""; cobroInput.dataset.id = r.id_orden; }
 
-    // Badge detalle
+    // Estado en detalle
     const detEstadoSlot = frag.querySelector(".details .slot-estado");
     if (detEstadoSlot) {
       detEstadoSlot.textContent = "";
       detEstadoSlot.appendChild(createBadgeElement(estTexto, r.id_estatus || estTexto));
     }
 
-    // Select estado
     const sel = frag.querySelector(".estado-select");
     if (sel) {
       sel.innerHTML = ESTADOS.map(o => `<option ${o === estTexto ? "selected" : ""}>${o}</option>`).join("");
       sel.dataset.id = r.id_orden;
     }
 
-    // Si ya estaba en modo edición (por re-render), respétalo
-    const editBtn = frag.querySelector(".btn-editar");
-    if (editBtn) {
-      editBtn.dataset.id = r.id_orden;
-      const enEdicion = EDIT.has(String(r.id_orden));
-      setEditModeInFragment(frag, String(r.id_orden), enEdicion);
-    }
+    // ✅ Inputs de edición (admin)
+    const editCliente = frag.querySelector(".edit-cliente");
+    const editTel1    = frag.querySelector(".edit-tel1");
+    const editTel2    = frag.querySelector(".edit-tel2");
+    const editMarca   = frag.querySelector(".edit-marca");
+    const editModelo  = frag.querySelector(".edit-modelo");
+    const editAnio    = frag.querySelector(".edit-anio");
+    const editColor   = frag.querySelector(".edit-color");
+    const editFalla   = frag.querySelector(".edit-falla");
+
+    if (editCliente) editCliente.value = r.cliente || "";
+    if (editTel1) editTel1.value = r.telefono1 ? formatTelefono(r.telefono1) : "";
+    if (editTel2) editTel2.value = r.telefono2 ? formatTelefono(r.telefono2) : "";
+    if (editMarca) editMarca.value = r.marca || "";
+    if (editModelo) editModelo.value = r.modelo || "";
+    if (editAnio) editAnio.value = (r.anio ?? "").toString();
+    if (editColor) editColor.value = r.color || "";
+    if (editFalla) editFalla.value = r.falla || "";
 
     return frag;
-  }
-
-  function setEditModeInPanel(panel, ordenId, enabled) {
-    const fields = [
-      ".edit-cliente",
-      ".edit-tel1",
-      ".edit-tel2",
-      ".edit-marca",
-      ".edit-modelo",
-      ".edit-anio",
-      ".edit-color",
-    ];
-    fields.forEach(sel => {
-      const el = panel.querySelector(sel);
-      if (el) el.disabled = !enabled;
-    });
-
-    hookTelefonoEdicion(panel);
-
-    const btn = panel.querySelector(`.btn-editar[data-id="${ordenId}"]`) || panel.querySelector(".btn-editar");
-    if (btn) {
-      btn.textContent = enabled ? "Cancelar" : "Editar";
-      btn.classList.toggle("btn-outline-primary", !enabled);
-      btn.classList.toggle("btn-outline-secondary", enabled);
-    }
-  }
-
-  function setEditModeInFragment(frag, ordenId, enabled) {
-    const panel = frag.querySelector(".details");
-    if (!panel) return;
-    setEditModeInPanel(panel, ordenId, enabled);
   }
 
   function renderHoy(rows) {
@@ -458,7 +379,7 @@
 
         const img = document.createElement("img");
         const ruta = String(f.ruta_archivo || "");
-        const src = /^https?:\/\//i.test(ruta) ? ruta : "/" + ruta.replace(/^\/+/, "");
+        const src = /^https?:\/\//i.test(ruta) show ? ruta : "/" + ruta.replace(/^\/+/, "");
         img.src = src;
         img.alt = f.nombre_original || "foto";
         img.style.width = "120px";
@@ -524,31 +445,18 @@
     $("#clienteNombre")?.focus();
   });
 
-  // ========= INTERACCIONES EN TABLAS (HOY y PENDIENTES) =========
+  // ========= INTERACCIONES (HOY y PENDIENTES) =========
   async function handleTableClick(e) {
     const btnToggle  = e.target.closest(".toggle-detalle");
     const btnGuardar = e.target.closest(".guardar-cambios");
     const btnDelFoto = e.target.closest(".del-foto");
     const btnBorrar  = e.target.closest(".borrar");
     const btnEditar  = e.target.closest(".btn-editar");
+    const btnCancelarEd = e.target.closest(".btn-cancelar-edicion");
 
     const btnCamOn   = e.target.closest(".cam-abrir");
     const btnShot    = e.target.closest(".cam-foto");
     const btnCancel  = e.target.closest(".cam-cancel");
-
-    // ====== EDITAR / CANCELAR ======
-    if (btnEditar) {
-      const id = String(btnEditar.dataset.id || "");
-      const panel = $(`.details[data-id="${id}"]`);
-      if (!panel) return;
-
-      const enabled = !EDIT.has(id);
-      if (enabled) EDIT.add(id);
-      else EDIT.delete(id);
-
-      setEditModeInPanel(panel, id, enabled);
-      return;
-    }
 
     // ====== MÁS INFO ======
     if (btnToggle) {
@@ -558,21 +466,12 @@
       const panel = trDetalle?.querySelector(".details");
       if (!panel || !trDetalle) return;
 
-      // sincronizar falla por si acaso
-      const fallaTxt  = trPrincipal.querySelector(".slot-falla")?.textContent || "";
-      const fallaSpan = panel.querySelector(".slot-det-falla");
-      if (fallaSpan) fallaSpan.textContent = fallaTxt;
-
       const hidden = trDetalle.hasAttribute("hidden") || trDetalle.style.display === "none";
       if (hidden) {
         trDetalle.removeAttribute("hidden");
         trDetalle.style.display = "table-row";
         panel.removeAttribute("hidden");
         btnToggle.textContent = "Menos info";
-
-        // al abrir: aplica modo edición si ya estaba activo
-        const enabled = EDIT.has(String(id));
-        setEditModeInPanel(panel, String(id), enabled);
 
         if (!CAM.has(id)) CAM.set(id, { stream: null, captures: [] });
         await cargarFotos(id);
@@ -582,7 +481,6 @@
         panel.setAttribute("hidden", "");
         btnToggle.textContent = "Más info";
 
-        // detener cámara si está abierta
         const S = CAM.get(id);
         if (S?.stream) { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; }
         const v = $(`video.cam-preview[data-id="${id}"]`);
@@ -597,6 +495,54 @@
       return;
     }
 
+    // ====== EDITAR (habilita inputs) ======
+    if (btnEditar) {
+      const id = btnEditar.dataset.id;
+      const panel = $(`.details[data-id="${id}"]`);
+      if (!panel) return;
+
+      panel.dataset.editing = "1";
+
+      const inputs = panel.querySelectorAll(
+        ".edit-cliente,.edit-tel1,.edit-tel2,.edit-marca,.edit-modelo,.edit-anio,.edit-color,.edit-falla"
+      );
+
+      inputs.forEach(inp => {
+        inp.dataset.orig = inp.value ?? "";
+        inp.disabled = false;
+      });
+
+      const btnCancel = panel.querySelector(".btn-cancelar-edicion");
+      if (btnCancel) btnCancel.hidden = false;
+
+      btnEditar.disabled = true;
+      return;
+    }
+
+    // ====== CANCELAR EDICIÓN ======
+    if (btnCancelarEd) {
+      const id = btnCancelarEd.dataset.id;
+      const panel = $(`.details[data-id="${id}"]`);
+      if (!panel) return;
+
+      panel.dataset.editing = "0";
+
+      const inputs = panel.querySelectorAll(
+        ".edit-cliente,.edit-tel1,.edit-tel2,.edit-marca,.edit-modelo,.edit-anio,.edit-color,.edit-falla"
+      );
+
+      inputs.forEach(inp => {
+        inp.value = inp.dataset.orig ?? inp.value ?? "";
+        inp.disabled = true;
+      });
+
+      const btnEdit = panel.querySelector(".btn-editar");
+      if (btnEdit) btnEdit.disabled = false;
+
+      btnCancelarEd.hidden = true;
+      return;
+    }
+
     // ====== ABRIR CÁMARA ======
     if (btnCamOn) {
       const id = btnCamOn.dataset.id;
@@ -606,10 +552,7 @@
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-        if (v) {
-          v.srcObject = stream;
-          v.style.display = "block";
-        }
+        if (v) { v.srcObject = stream; v.style.display = "block"; }
         if (shotBtn) shotBtn.disabled = false;
         if (cancelBtn) cancelBtn.disabled = false;
         btnCamOn.disabled = true;
@@ -688,7 +631,7 @@
 
     // ====== GUARDAR ======
     if (btnGuardar) {
-      const id = String(btnGuardar.dataset.id || "");
+      const id = btnGuardar.dataset.id;
       const panel = $(`.details[data-id="${id}"]`);
       if (!panel) return;
 
@@ -697,14 +640,16 @@
       const cobroEl = panel.querySelector(".cobro-input");
       const mecanicoEl = panel.querySelector(".mecanico-input");
 
-      // nuevos: edición cliente/vehículo
-      const edCliente = panel.querySelector(".edit-cliente");
-      const edTel1    = panel.querySelector(".edit-tel1");
-      const edTel2    = panel.querySelector(".edit-tel2");
-      const edMarca   = panel.querySelector(".edit-marca");
-      const edModelo  = panel.querySelector(".edit-modelo");
-      const edAnio    = panel.querySelector(".edit-anio");
-      const edColor   = panel.querySelector(".edit-color");
+      // edición (solo si está en modo edición)
+      const editing = panel.dataset.editing === "1";
+      const editCliente = panel.querySelector(".edit-cliente");
+      const editTel1    = panel.querySelector(".edit-tel1");
+      const editTel2    = panel.querySelector(".edit-tel2");
+      const editMarca   = panel.querySelector(".edit-marca");
+      const editModelo  = panel.querySelector(".edit-modelo");
+      const editAnio    = panel.querySelector(".edit-anio");
+      const editColor   = panel.querySelector(".edit-color");
+      const editFalla   = panel.querySelector(".edit-falla");
 
       const fotosInput = panel.querySelector(`.fotos-input[data-id="${id}"]`);
       const okSpan  = panel.querySelector(".save-ok");
@@ -713,37 +658,27 @@
       try {
         const payload = {};
 
-        // estado/vin/cobro/mecanico
+        // siempre
         if (sel?.value) payload.estado = sel.value;
         if (vinEl) payload.vin = (vinEl.value || "").trim();
         if (cobroEl) payload.cobro = (cobroEl.value || "").trim();
         if (mecanicoEl) payload.mecanico = (mecanicoEl.value || "").trim();
 
-        // ✅ cliente/vehículo (mandamos 2 nombres por compatibilidad con backend)
-        if (edCliente) {
-          const v = (edCliente.value || "").trim();
-          payload.cliente = v;
-          payload.clienteNombre = v;
+        // solo si editar está activo
+        if (editing) {
+          if (editCliente) payload.clienteNombre = (editCliente.value || "").trim();
+          if (editTel1) payload.telefono1 = soloDigitos(editTel1.value);
+          if (editTel2) payload.telefono2 = soloDigitos(editTel2.value);
+          if (editMarca) payload.marca = (editMarca.value || "").trim();
+          if (editModelo) payload.modelo = (editModelo.value || "").trim();
+          if (editAnio) payload.anio = (editAnio.value || "").trim();
+          if (editColor) payload.color = (editColor.value || "").trim();
+          if (editFalla) payload.falla = (editFalla.value || "").trim();
         }
-        if (edTel1) {
-          const v = soloDigitos(edTel1.value);
-          payload.telefono1 = v;
-        }
-        if (edTel2) {
-          const v = soloDigitos(edTel2.value);
-          payload.telefono2 = v;
-        }
-        if (edMarca)  payload.marca  = (edMarca.value || "").trim();
-        if (edModelo) payload.modelo = (edModelo.value || "").trim();
-        if (edAnio) {
-          const n = Number((edAnio.value || "").trim());
-          if (!isNaN(n) && n > 0) payload.anio = n;
-        }
-        if (edColor) payload.color = (edColor.value || "").trim();
 
         await API.patch(id, payload);
 
-        // Fotos (input + cámara)
+        // Fotos
         const S = CAM.get(id) || { captures: [] };
         const bag = [];
         if (fotosInput?.files?.length) bag.push(...fotosInput.files);
@@ -757,12 +692,22 @@
           await cargarFotos(id);
         }
 
+        // salir de modo edición (si estaba)
+        if (editing) {
+          panel.dataset.editing = "0";
+          const inputs = panel.querySelectorAll(
+            ".edit-cliente,.edit-tel1,.edit-tel2,.edit-marca,.edit-modelo,.edit-anio,.edit-color,.edit-falla"
+          );
+          inputs.forEach(inp => { inp.disabled = true; });
+          const btnEdit = panel.querySelector(".btn-editar");
+          const btnCancel = panel.querySelector(".btn-cancelar-edicion");
+          if (btnEdit) btnEdit.disabled = false;
+          if (btnCancel) btnCancel.hidden = true;
+        }
+
         okSpan?.classList.remove("d-none");
         errSpan?.classList.add("d-none");
         setTimeout(() => okSpan?.classList.add("d-none"), 1500);
-
-        // si estaba en edición, lo apagamos al guardar
-        if (EDIT.has(id)) EDIT.delete(id);
 
         await cargarRecepcion();
       } catch (err) {
@@ -797,7 +742,6 @@
 
       try {
         await API.delete(id);
-        EDIT.delete(String(id));
         setMsg("Registro borrado.");
         await cargarRecepcion();
       } catch (err) {
@@ -808,15 +752,18 @@
     }
   }
 
-  // Delegación en ambas tablas
+  // Delegación
   tbodyHoy?.addEventListener("click", handleTableClick);
   tbodyPendientes?.addEventListener("click", handleTableClick);
 
-  // ====== Change de estado: actualizar badge del detalle en vivo ======
+  // Formateo teléfonos en edición
+  tbodyHoy?.addEventListener("input", onTelefonoEditInput);
+  tbodyPendientes?.addEventListener("input", onTelefonoEditInput);
+
+  // Change estado → badge en vivo
   function handleChange(e) {
     const sel = e.target.closest(".estado-select");
     if (!sel) return;
-
     const id = sel.dataset.id;
     const detEstadoSlot = $(`.details[data-id="${id}"] .slot-estado`);
     if (detEstadoSlot) {
@@ -869,6 +816,6 @@
   btnFullLista?.addEventListener("click", () => togglePantallaCompleta(cardLista, btnFullLista));
   btnFullPend?.addEventListener("click", () => togglePantallaCompleta(cardPend, btnFullPend));
 
-  // ====== INICIO ======
+  // INICIO
   cargarRecepcion();
 })();
