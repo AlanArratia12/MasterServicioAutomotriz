@@ -4,6 +4,7 @@ extends layout
 block content
   h1 Recepción de vehículos
 
+  // ===== FORMULARIO: SOLO ADMIN =====
   if user && user.role === 'admin'
     form#form-recepcion.card(enctype="multipart/form-data")
       .section
@@ -68,13 +69,14 @@ block content
               th Marca / Modelo / Año / Color
               th Falla
               th Estado
-              th(style="width:240px") Acciones
+              th(style="width:260px") Acciones
           tbody#tabla-lista
 
     .card#card-pendientes
       .card-header-flex.d-flex.justify-content-between.align-items-center.mb-2
         h3.mb-0 Pendientes
         button#btn-fullscreen-pendientes.btn.btn-primary.btn-sm(type="button" title="Ver solo la lista en pantalla completa") ⛶
+
       p.note En esta tabla solo aparecen vehículos NO de hoy y NO entregados.
 
       .table-responsive
@@ -86,7 +88,7 @@ block content
               th Marca / Modelo / Año / Color
               th Falla
               th Estado
-              th(style="width:240px") Acciones
+              th(style="width:260px") Acciones
           tbody#tbody-pendientes
 
   template#tpl-fila
@@ -112,13 +114,13 @@ block content
                 | Datos del cliente
 
               label.form-label.mb-1 Nombre
-              input.form-control.form-control-sm.edit-cliente(type="text" disabled)
+              input.form-control.form-control-sm.edit-cliente(type="text" data-id="__ID__" disabled)
 
               label.form-label.mt-2.mb-1 Teléfono 1
-              input.form-control.form-control-sm.edit-tel1(type="tel" disabled)
+              input.form-control.form-control-sm.edit-tel1(type="text" data-id="__ID__" disabled)
 
               label.form-label.mt-2.mb-1 Teléfono 2
-              input.form-control.form-control-sm.edit-tel2(type="tel" disabled)
+              input.form-control.form-control-sm.edit-tel2(type="text" data-id="__ID__" disabled)
 
             .details-card.details-card--vehiculo
               h5
@@ -126,18 +128,18 @@ block content
                 | Datos del vehículo
 
               label.form-label.mb-1 Marca
-              input.form-control.form-control-sm.edit-marca(type="text" disabled)
+              input.form-control.form-control-sm.edit-marca(type="text" data-id="__ID__" disabled)
 
               label.form-label.mt-2.mb-1 Modelo
-              input.form-control.form-control-sm.edit-modelo(type="text" disabled)
+              input.form-control.form-control-sm.edit-modelo(type="text" data-id="__ID__" disabled)
 
               label.form-label.mt-2.mb-1 Año
-              input.form-control.form-control-sm.edit-anio(type="number" min="1950" max="2100" disabled)
+              input.form-control.form-control-sm.edit-anio(type="number" data-id="__ID__" disabled)
 
               label.form-label.mt-2.mb-1 Color
-              input.form-control.form-control-sm.edit-color(type="text" disabled)
+              input.form-control.form-control-sm.edit-color(type="text" data-id="__ID__" disabled)
 
-              p.mt-2
+              p.mt-3
                 strong Fecha de ingreso:
                 |  
                 span.slot-det-fecha __FECHA__
@@ -152,8 +154,8 @@ block content
                 id="vin-__ID__"
                 type="text"
                 placeholder="Ej. 1HGCM82633A004352"
-                value="__VIN__"
                 data-id="__ID__"
+                disabled
               )
 
           .details-grid.mt-2
@@ -163,7 +165,12 @@ block content
                 | Servicio
 
               label.form-label.mb-1 Falla reportada
-              textarea.form-control.form-control-sm.edit-falla(rows="3" disabled)
+              textarea.form-control.form-control-sm.edit-falla(
+                rows="3"
+                data-id="__ID__"
+                disabled
+                placeholder="Describe la falla..."
+              )
 
               p.mt-2
                 strong Estado actual:
@@ -187,13 +194,11 @@ block content
               if user && user.role === 'admin'
                 label.form-label.mb-1 Presupuesto / Cobro
                 textarea.form-control.form-control-sm.cobro-input(rows="3" data-id="__ID__")
+                label.form-label.mt-2.mb-1 Mecánico que reparó
+                input.form-control.form-control-sm.mecanico-input(type="text" data-id="__ID__")
               else
-                //- empleado no edita cobro (se ve, pero no se manda si no eres admin)
-                label.form-label.mb-1 Presupuesto / Cobro
-                textarea.form-control.form-control-sm.cobro-input(rows="3" data-id="__ID__" disabled)
-
-              label.form-label.mt-2.mb-1 Mecánico que reparó
-              input.form-control.form-control-sm.mecanico-input(type="text" data-id="__ID__")
+                label.form-label.mb-1 Mecánico que reparó
+                input.form-control.form-control-sm.mecanico-input(type="text" data-id="__ID__" disabled)
 
           h5.mt-3
             i.bi.bi-camera-fill.me-1
@@ -222,12 +227,10 @@ block content
                 p.text-muted.small(data-placeholder="no-fotos") Sin fotos aún.
 
           .details-foot.mt-3
-            button.btn.btn-sm.btn-warning.btn-editar(type="button" data-id="__ID__") Editar
-            button.btn.btn-sm.btn-outline-secondary.ms-2.btn-cancelar-edicion(type="button" data-id="__ID__" hidden) Cancelar
+            button.btn.btn-sm.btn-warning.editar-cambios(type="button" data-id="__ID__") Editar
             button.btn.btn-sm.guardar-cambios.ms-2(data-id="__ID__") Guardar
             span.ms-2.text-success.small.save-ok.d-none(data-id="__ID__") Guardado ✓
             span.ms-2.text-danger.small.save-err.d-none(data-id="__ID__") Error al guardar
 
   script(src="/js/main.js?v=8" defer)
-  //- 👇 sube versión para forzar cache bust
-  script(src="/js/recepcion.js?v=20" defer)
+  script(src="/js/recepcion.js?v=999" defer)

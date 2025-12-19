@@ -1,21 +1,28 @@
 // src/public/js/recepcion.js
 (() => {
   const $  = (s, c = document) => c.querySelector(s);
+  const $$ = (s, c = document) => Array.from(c.querySelectorAll(s));
 
   const form      = $("#form-recepcion");
   const btnClear  = $("#btn-limpiar");
   const msg       = $("#msg-orden");
   const tpl       = $("#tpl-fila");
 
-  const tbodyHoy        = $("#tabla-lista");
-  const tbodyPendientes = $("#tbody-pendientes");
+  // Tabla HOY
+  const tbodyHoy = $("#tabla-lista");
 
+  // Card + fullscreen HOY
   const cardLista    = $("#card-lista-hoy");
   const btnFullLista = $("#btn-fullscreen-hoy");
 
+  // Card + fullscreen PENDIENTES
   const cardPend    = $("#card-pendientes");
   const btnFullPend = $("#btn-fullscreen-pendientes");
 
+  // Tabla PENDIENTES
+  const tbodyPendientes = $("#tbody-pendientes");
+
+  // Cámara por orden
   const CAM = new Map();
 
   const ESTADOS = [
@@ -27,6 +34,7 @@
     "Entregado",
   ];
 
+  // Pendientes incluye Recibido, PERO SOLO si NO es hoy
   const ESTADOS_PEND = [
     "Recibido",
     "Diagnóstico",
@@ -97,27 +105,12 @@
     if (text) setTimeout(() => { msg.textContent = ""; }, 3000);
   }
 
-  function fill(el, text) {
-    if (!el) return;
-    if (el.value !== undefined) el.value = text ?? "";
-    else el.textContent = text ?? "";
-  }
+  function fill(el, text) { if (el) el.textContent = text ?? ""; }
 
   function autoText(r) {
     const anio  = (r.anio ?? "").toString();
     const color = r.color || "";
     return `${r.marca || ""} ${r.modelo || ""} ${anio} — ${color}`.trim();
-  }
-
-  // ✅ IMPORTANTE: la falla puede venir con distinto nombre desde el backend
-  function getFalla(r) {
-    return (
-      r?.falla ??
-      r?.falla_reportada ??
-      r?.fallaReportada ??
-      r?.falla_reporte ??
-      ""
-    );
   }
 
   function mapEstatus(id) {
@@ -133,6 +126,7 @@
     let s = { bg: "#dbeafe", fg: "#1e3a8a", br: "#bfdbfe" };
     const num = Number(id);
     const text = String(id).toLowerCase();
+
     if ((!isNaN(num) && num === 1) || text.includes("recibido")) {
       s = { bg: "#dbeafe", fg: "#1e3a8a", br: "#bfdbfe" };
     } else if ((!isNaN(num) && [2,3,4].includes(num)) || text.match(/diagn|espera|repara/)) {
@@ -163,7 +157,9 @@
   }
 
   // ========= TELÉFONO =========
-  function soloDigitos(v) { return String(v || "").replace(/\D/g, "").slice(0, 10); }
+  function soloDigitos(v) {
+    return String(v || "").replace(/\D/g, "").slice(0, 10);
+  }
 
   function formatTelefono(value) {
     const nums = soloDigitos(value);
@@ -175,26 +171,23 @@
   ["#telefono1", "#telefono2"].forEach(sel => {
     const input = document.querySelector(sel);
     if (!input) return;
-    input.addEventListener("input", () => { input.value = formatTelefono(input.value); });
+    input.addEventListener("input", () => {
+      input.value = formatTelefono(input.value);
+    });
   });
 
-  function onTelefonoEditInput(e) {
-    const t = e.target;
-    if (!t) return;
-    if (t.classList.contains("edit-tel1") || t.classList.contains("edit-tel2")) {
-      t.value = formatTelefono(t.value);
-    }
-  }
-
-  // ========= FECHAS =========
+  // ========= FECHAS (HOY vs PENDIENTES) =========
   function getRawFecha(r) {
     return r?.fecha_ingreso || r?.created_at || r?.fecha || r?.fechaIngreso || "";
   }
+
   function pad2(n) { return String(n).padStart(2, "0"); }
+
   function todayKeyLocal() {
     const d = new Date();
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   }
+
   function dateKeyFromRaw(raw) {
     if (!raw) return "";
     const s = String(raw);
@@ -213,6 +206,7 @@
 
     return "";
   }
+
   function getFechaTexto(r) {
     const raw = getRawFecha(r);
     const key = dateKeyFromRaw(raw);
@@ -251,12 +245,14 @@
       const est = mapEstatus(r.id_estatus);
       const key = dateKeyFromRaw(getRawFecha(r));
 
+      // Si no podemos leer fecha, lo tratamos como HOY para no mandarlo a pendientes por error
       if (!key || key === hoyKey) {
         hoy.push(r);
         return;
       }
 
-      if (est !== "Entregado" && ESTADOS_PEND.includes(est)) {
+      // NO es hoy: Pendientes solo si estado está en la lista y NO es Entregado
+      if (ESTADOS_PEND.includes(est) && est !== "Entregado") {
         pend.push(r);
       }
     });
@@ -268,12 +264,11 @@
   function buildFila(r, idx) {
     const frag = tpl.content.cloneNode(true);
     const estTexto = mapEstatus(r.id_estatus);
-    const fallaTxt = getFalla(r);
 
     fill(frag.querySelector(".slot-idx"), String(idx));
     fill(frag.querySelector(".slot-cliente"), r.cliente || "");
     fill(frag.querySelector(".slot-auto"), autoText(r));
-    fill(frag.querySelector(".slot-falla"), fallaTxt || "");
+    fill(frag.querySelector(".slot-falla"), r.falla || "");
 
     const estadoSlot = frag.querySelector(".slot-estado");
     if (estadoSlot) {
@@ -285,15 +280,39 @@
     const panel = frag.querySelector(".details");
     panel?.setAttribute("data-id", r.id_orden);
 
-    const spanFecha = frag.querySelector(".slot-det-fecha");
-    if (spanFecha) spanFecha.textContent = getFechaTexto(r);
+    // ====== EDITABLES ======
+    const clienteEl = frag.querySelector(".edit-cliente");
+    if (clienteEl) { clienteEl.value = (r.cliente || ""); clienteEl.disabled = true; clienteEl.dataset.id = r.id_orden; }
+
+    const tel1El = frag.querySelector(".edit-tel1");
+    if (tel1El) { tel1El.value = r.telefono1 ? formatTelefono(r.telefono1) : ""; tel1El.disabled = true; tel1El.dataset.id = r.id_orden; }
+
+    const tel2El = frag.querySelector(".edit-tel2");
+    if (tel2El) { tel2El.value = r.telefono2 ? formatTelefono(r.telefono2) : ""; tel2El.disabled = true; tel2El.dataset.id = r.id_orden; }
+
+    const marcaEl = frag.querySelector(".edit-marca");
+    if (marcaEl) { marcaEl.value = (r.marca || ""); marcaEl.disabled = true; marcaEl.dataset.id = r.id_orden; }
+
+    const modeloEl = frag.querySelector(".edit-modelo");
+    if (modeloEl) { modeloEl.value = (r.modelo || ""); modeloEl.disabled = true; modeloEl.dataset.id = r.id_orden; }
+
+    const anioEl = frag.querySelector(".edit-anio");
+    if (anioEl) { anioEl.value = (r.anio ?? "").toString(); anioEl.disabled = true; anioEl.dataset.id = r.id_orden; }
+
+    const colorEl = frag.querySelector(".edit-color");
+    if (colorEl) { colorEl.value = (r.color || ""); colorEl.disabled = true; colorEl.dataset.id = r.id_orden; }
+
+    const fallaArea = frag.querySelector(".edit-falla");
+    if (fallaArea) { fallaArea.value = (r.falla || ""); fallaArea.disabled = true; fallaArea.dataset.id = r.id_orden; }
+
+    // Fecha
+    fill(frag.querySelector(".slot-det-fecha"), getFechaTexto(r));
 
     // VIN
     const vinValor = (r.VIN ?? r.vin ?? "").toString();
-    const spanVin = frag.querySelector(".slot-det-vin");
-    if (spanVin) spanVin.textContent = vinValor || "-";
+    fill(frag.querySelector(".slot-det-vin"), vinValor || "-");
     const vinInput = frag.querySelector(".vin-input");
-    if (vinInput) { vinInput.value = vinValor || ""; vinInput.dataset.id = r.id_orden; }
+    if (vinInput) { vinInput.value = vinValor || ""; vinInput.disabled = true; vinInput.dataset.id = r.id_orden; }
 
     // Seguimiento
     const mecValor = (r.mecanico ?? "").toString();
@@ -304,39 +323,20 @@
     const cobroInput = frag.querySelector(".cobro-input");
     if (cobroInput) { cobroInput.value = cobroValor || ""; cobroInput.dataset.id = r.id_orden; }
 
-    // Estado en detalle
+    // Badge en detalle
     const detEstadoSlot = frag.querySelector(".details .slot-estado");
     if (detEstadoSlot) {
       detEstadoSlot.textContent = "";
       detEstadoSlot.appendChild(createBadgeElement(estTexto, r.id_estatus || estTexto));
     }
 
+    // Select estado
     const sel = frag.querySelector(".estado-select");
     if (sel) {
       sel.innerHTML = ESTADOS.map(o => `<option ${o === estTexto ? "selected" : ""}>${o}</option>`).join("");
       sel.dataset.id = r.id_orden;
+      sel.disabled = true; // se habilita con Editar
     }
-
-    // ✅ Inputs de edición (admin)
-    const editCliente = frag.querySelector(".edit-cliente");
-    const editTel1    = frag.querySelector(".edit-tel1");
-    const editTel2    = frag.querySelector(".edit-tel2");
-    const editMarca   = frag.querySelector(".edit-marca");
-    const editModelo  = frag.querySelector(".edit-modelo");
-    const editAnio    = frag.querySelector(".edit-anio");
-    const editColor   = frag.querySelector(".edit-color");
-    const editFalla   = frag.querySelector(".edit-falla");
-
-    if (editCliente) editCliente.value = r.cliente || "";
-    if (editTel1) editTel1.value = r.telefono1 ? formatTelefono(r.telefono1) : "";
-    if (editTel2) editTel2.value = r.telefono2 ? formatTelefono(r.telefono2) : "";
-    if (editMarca) editMarca.value = r.marca || "";
-    if (editModelo) editModelo.value = r.modelo || "";
-    if (editAnio) editAnio.value = (r.anio ?? "").toString();
-    if (editColor) editColor.value = r.color || "";
-
-    // ✅ AQUÍ ESTABA EL PROBLEMA: ahora usa getFalla(r)
-    if (editFalla) editFalla.value = fallaTxt || "";
 
     return frag;
   }
@@ -430,13 +430,13 @@
     try {
       const fd = new FormData(form);
 
+      // Mandar SOLO dígitos al backend
       const tel1Input = $("#telefono1");
       const tel2Input = $("#telefono2");
       if (tel1Input) fd.set("telefono1", soloDigitos(tel1Input.value));
       if (tel2Input) fd.set("telefono2", soloDigitos(tel2Input.value));
 
       await API.crear(fd);
-
       setMsg("Orden creada correctamente");
       form.reset();
       $("#clienteNombre")?.focus();
@@ -447,6 +447,7 @@
     }
   });
 
+  // Limpiar con confirmación
   btnClear?.addEventListener("click", () => {
     if (!form) return;
     const seguro = confirm("⚠️ ¿Seguro que deseas limpiar el formulario?\n\nLos datos capturados se perderán.");
@@ -455,18 +456,34 @@
     $("#clienteNombre")?.focus();
   });
 
+  // ========= HELPERS EDIT =========
+  function setEditMode(panel, on) {
+    const inputs = [
+      ".edit-cliente", ".edit-tel1", ".edit-tel2",
+      ".edit-marca", ".edit-modelo", ".edit-anio", ".edit-color",
+      ".edit-falla", ".vin-input", ".estado-select",
+      ".mecanico-input", ".cobro-input"
+    ];
+    inputs.forEach(sel => {
+      const el = panel.querySelector(sel);
+      if (!el) return;
+      el.disabled = !on;
+    });
+  }
+
+  // Delegación en ambas tablas
   async function handleTableClick(e) {
     const btnToggle  = e.target.closest(".toggle-detalle");
+    const btnEditar  = e.target.closest(".editar-cambios");
     const btnGuardar = e.target.closest(".guardar-cambios");
     const btnDelFoto = e.target.closest(".del-foto");
     const btnBorrar  = e.target.closest(".borrar");
-    const btnEditar  = e.target.closest(".btn-editar");
-    const btnCancelarEd = e.target.closest(".btn-cancelar-edicion");
 
     const btnCamOn   = e.target.closest(".cam-abrir");
     const btnShot    = e.target.closest(".cam-foto");
     const btnCancel  = e.target.closest(".cam-cancel");
 
+    // ====== MÁS INFO ======
     if (btnToggle) {
       const id = btnToggle.dataset.id;
       const trPrincipal = btnToggle.closest("tr");
@@ -474,12 +491,20 @@
       const panel = trDetalle?.querySelector(".details");
       if (!panel || !trDetalle) return;
 
+      // sincronizar falla desde la columna (siempre)
+      const fallaTxt = trPrincipal.querySelector(".slot-falla")?.textContent || "";
+      const fallaArea = panel.querySelector(".edit-falla");
+      if (fallaArea) fallaArea.value = fallaTxt;
+
       const hidden = trDetalle.hasAttribute("hidden") || trDetalle.style.display === "none";
       if (hidden) {
         trDetalle.removeAttribute("hidden");
         trDetalle.style.display = "table-row";
         panel.removeAttribute("hidden");
         btnToggle.textContent = "Menos info";
+
+        // por default NO editable
+        setEditMode(panel, false);
 
         if (!CAM.has(id)) CAM.set(id, { stream: null, captures: [] });
         await cargarFotos(id);
@@ -489,6 +514,7 @@
         panel.setAttribute("hidden", "");
         btnToggle.textContent = "Más info";
 
+        // detener cámara si está abierta
         const S = CAM.get(id);
         if (S?.stream) { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; }
         const v = $(`video.cam-preview[data-id="${id}"]`);
@@ -503,52 +529,28 @@
       return;
     }
 
+    // ====== EDITAR ======
     if (btnEditar) {
       const id = btnEditar.dataset.id;
       const panel = $(`.details[data-id="${id}"]`);
       if (!panel) return;
 
-      panel.dataset.editing = "1";
+      setEditMode(panel, true);
 
-      const inputs = panel.querySelectorAll(
-        ".edit-cliente,.edit-tel1,.edit-tel2,.edit-marca,.edit-modelo,.edit-anio,.edit-color,.edit-falla"
-      );
-
-      inputs.forEach(inp => {
-        inp.dataset.orig = inp.value ?? "";
-        inp.disabled = false;
+      // Formateo en vivo de teléfonos en detalle
+      const t1 = panel.querySelector(".edit-tel1");
+      const t2 = panel.querySelector(".edit-tel2");
+      [t1, t2].forEach(inp => {
+        if (!inp) return;
+        inp.addEventListener("input", () => { inp.value = formatTelefono(inp.value); }, { once: true });
       });
 
-      const btnCancel = panel.querySelector(".btn-cancelar-edicion");
-      if (btnCancel) btnCancel.hidden = false;
-
+      btnEditar.textContent = "Editando...";
       btnEditar.disabled = true;
       return;
     }
 
-    if (btnCancelarEd) {
-      const id = btnCancelarEd.dataset.id;
-      const panel = $(`.details[data-id="${id}"]`);
-      if (!panel) return;
-
-      panel.dataset.editing = "0";
-
-      const inputs = panel.querySelectorAll(
-        ".edit-cliente,.edit-tel1,.edit-tel2,.edit-marca,.edit-modelo,.edit-anio,.edit-color,.edit-falla"
-      );
-
-      inputs.forEach(inp => {
-        inp.value = inp.dataset.orig ?? inp.value ?? "";
-        inp.disabled = true;
-      });
-
-      const btnEdit = panel.querySelector(".btn-editar");
-      if (btnEdit) btnEdit.disabled = false;
-
-      btnCancelarEd.hidden = true;
-      return;
-    }
-
+    // ====== ABRIR CÁMARA ======
     if (btnCamOn) {
       const id = btnCamOn.dataset.id;
       const v = $(`video.cam-preview[data-id="${id}"]`);
@@ -573,6 +575,7 @@
       return;
     }
 
+    // ====== TOMAR FOTO ======
     if (btnShot) {
       const id = btnShot.dataset.id;
       const v = $(`video.cam-preview[data-id="${id}"]`);
@@ -586,7 +589,6 @@
       c.toBlob(blob => {
         if (!blob) return;
         const file = new File([blob], `foto-${Date.now()}.jpg`, { type: "image/jpeg" });
-
         const S = CAM.get(id) || { stream: null, captures: [] };
         S.captures.push(file);
         CAM.set(id, S);
@@ -606,6 +608,7 @@
       return;
     }
 
+    // ====== CANCELAR CÁMARA ======
     if (btnCancel) {
       const id = btnCancel.dataset.id;
       const v = $(`video.cam-preview[data-id="${id}"]`);
@@ -629,6 +632,7 @@
       return;
     }
 
+    // ====== GUARDAR ======
     if (btnGuardar) {
       const id = btnGuardar.dataset.id;
       const panel = $(`.details[data-id="${id}"]`);
@@ -639,15 +643,14 @@
       const cobroEl = panel.querySelector(".cobro-input");
       const mecanicoEl = panel.querySelector(".mecanico-input");
 
-      const editing = panel.dataset.editing === "1";
-      const editCliente = panel.querySelector(".edit-cliente");
-      const editTel1    = panel.querySelector(".edit-tel1");
-      const editTel2    = panel.querySelector(".edit-tel2");
-      const editMarca   = panel.querySelector(".edit-marca");
-      const editModelo  = panel.querySelector(".edit-modelo");
-      const editAnio    = panel.querySelector(".edit-anio");
-      const editColor   = panel.querySelector(".edit-color");
-      const editFalla   = panel.querySelector(".edit-falla");
+      const clienteEl = panel.querySelector(".edit-cliente");
+      const tel1El = panel.querySelector(".edit-tel1");
+      const tel2El = panel.querySelector(".edit-tel2");
+      const marcaEl = panel.querySelector(".edit-marca");
+      const modeloEl = panel.querySelector(".edit-modelo");
+      const anioEl = panel.querySelector(".edit-anio");
+      const colorEl = panel.querySelector(".edit-color");
+      const fallaEl = panel.querySelector(".edit-falla");
 
       const fotosInput = panel.querySelector(`.fotos-input[data-id="${id}"]`);
       const okSpan  = panel.querySelector(".save-ok");
@@ -655,24 +658,36 @@
 
       try {
         const payload = {};
+
+        // Estado + seguimiento
         if (sel?.value) payload.estado = sel.value;
         if (vinEl) payload.vin = (vinEl.value || "").trim();
         if (cobroEl) payload.cobro = (cobroEl.value || "").trim();
         if (mecanicoEl) payload.mecanico = (mecanicoEl.value || "").trim();
 
-        if (editing) {
-          if (editCliente) payload.clienteNombre = (editCliente.value || "").trim();
-          if (editTel1) payload.telefono1 = soloDigitos(editTel1.value);
-          if (editTel2) payload.telefono2 = soloDigitos(editTel2.value);
-          if (editMarca) payload.marca = (editMarca.value || "").trim();
-          if (editModelo) payload.modelo = (editModelo.value || "").trim();
-          if (editAnio) payload.anio = (editAnio.value || "").trim();
-          if (editColor) payload.color = (editColor.value || "").trim();
-          if (editFalla) payload.falla = (editFalla.value || "").trim();
+        // Cliente / Vehículo / Falla (doble naming por compatibilidad)
+        if (clienteEl) {
+          const v = (clienteEl.value || "").trim();
+          payload.cliente = v;
+          payload.clienteNombre = v;
         }
+        if (tel1El) {
+          const v = soloDigitos(tel1El.value);
+          payload.telefono1 = v;
+        }
+        if (tel2El) {
+          const v = soloDigitos(tel2El.value);
+          payload.telefono2 = v;
+        }
+        if (marcaEl) payload.marca = (marcaEl.value || "").trim();
+        if (modeloEl) payload.modelo = (modeloEl.value || "").trim();
+        if (anioEl) payload.anio = Number(anioEl.value || 0) || (anioEl.value || "").trim();
+        if (colorEl) payload.color = (colorEl.value || "").trim();
+        if (fallaEl) payload.falla = (fallaEl.value || "").trim();
 
         await API.patch(id, payload);
 
+        // Fotos (input + cámara)
         const S = CAM.get(id) || { captures: [] };
         const bag = [];
         if (fotosInput?.files?.length) bag.push(...fotosInput.files);
@@ -684,18 +699,6 @@
           S.captures = [];
           CAM.set(id, S);
           await cargarFotos(id);
-        }
-
-        if (editing) {
-          panel.dataset.editing = "0";
-          const inputs = panel.querySelectorAll(
-            ".edit-cliente,.edit-tel1,.edit-tel2,.edit-marca,.edit-modelo,.edit-anio,.edit-color,.edit-falla"
-          );
-          inputs.forEach(inp => { inp.disabled = true; });
-          const btnEdit = panel.querySelector(".btn-editar");
-          const btnCancel = panel.querySelector(".btn-cancelar-edicion");
-          if (btnEdit) btnEdit.disabled = false;
-          if (btnCancel) btnCancel.hidden = true;
         }
 
         okSpan?.classList.remove("d-none");
@@ -712,6 +715,7 @@
       return;
     }
 
+    // ====== BORRAR FOTO ======
     if (btnDelFoto) {
       const fotoId = btnDelFoto.dataset.fotoId;
       const grid = btnDelFoto.closest(".fotos-grid");
@@ -726,6 +730,7 @@
       return;
     }
 
+    // ====== BORRAR ORDEN ======
     if (btnBorrar) {
       const id = btnBorrar.dataset.id;
       if (!id) return;
@@ -746,12 +751,11 @@
   tbodyHoy?.addEventListener("click", handleTableClick);
   tbodyPendientes?.addEventListener("click", handleTableClick);
 
-  tbodyHoy?.addEventListener("input", onTelefonoEditInput);
-  tbodyPendientes?.addEventListener("input", onTelefonoEditInput);
-
+  // ====== Change de estado: actualizar badge del detalle en vivo ======
   function handleChange(e) {
     const sel = e.target.closest(".estado-select");
     if (!sel) return;
+
     const id = sel.dataset.id;
     const detEstadoSlot = $(`.details[data-id="${id}"] .slot-estado`);
     if (detEstadoSlot) {
@@ -762,6 +766,7 @@
   tbodyHoy?.addEventListener("change", handleChange);
   tbodyPendientes?.addEventListener("change", handleChange);
 
+  // ====== Fullscreen ======
   function entrarPantallaCompleta(card, btn) {
     if (!card) return;
     card.dataset.full = "1";
@@ -803,5 +808,6 @@
   btnFullLista?.addEventListener("click", () => togglePantallaCompleta(cardLista, btnFullLista));
   btnFullPend?.addEventListener("click", () => togglePantallaCompleta(cardPend, btnFullPend));
 
+  // ====== INICIO ======
   cargarRecepcion();
 })();
